@@ -95,7 +95,7 @@ void Arguments::printHelp() {
 	std::ranges::sort(options,
 		[](const Option &a, const Option &b) { return a.name < b.name; });
 	std::cout << "SYNOPSIS\n\t" << tool_name
-			  << " input_file [--OPTION=VALUE | --FLAG]...\n"
+			  << " [--option=value | --flag]...\n"
 			  << std::endl
 			  << "DESCRIPTION\n"
 			  << tool_description << std::endl;

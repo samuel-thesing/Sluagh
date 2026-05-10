@@ -54,4 +54,29 @@ void Application::onEvent(SDL_Event *event) {
 	}
 }
 
-void Application::onRender() {}
+void Application::onRender() {
+	SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(gpu_device);
+	if (cmdbuf == nullptr) {
+		Logger::critical("Failed to acquire GPU command buffer");
+		throw std::runtime_error("Failed to acquire GPU command buffer");
+	}
+
+	SDL_GPUTexture* swapchain_texture;
+	if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmdbuf, window, &swapchain_texture, nullptr, nullptr)) {
+		Logger::critical("Failed to wait for swapchain texture");
+		throw std::runtime_error("Failed to wait for swapchain texture");
+	}
+
+	if (swapchain_texture != nullptr) {
+		SDL_GPUColorTargetInfo color_target = {0};
+		color_target.mip_level = 0;
+		color_target.texture = swapchain_texture;
+		color_target.clear_color = SDL_FColor{0.2f, 0.6f, 0.8f, 1.0f};
+		color_target.load_op = SDL_GPU_LOADOP_CLEAR;
+		color_target.store_op = SDL_GPU_STOREOP_STORE;
+
+		SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(cmdbuf, &color_target, 1, nullptr);
+		SDL_EndGPURenderPass(render_pass);
+	}
+	SDL_SubmitGPUCommandBuffer(cmdbuf);
+}

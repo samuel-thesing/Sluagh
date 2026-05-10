@@ -12,6 +12,7 @@ target_compile_options(project_warnings INTERFACE
     -Wold-style-cast -Wcast-align
     -Wunused -Woverloaded-virtual
     -Wconversion -Wsign-conversion
+    -Wno-missing-field-initializers
     -Werror
     >
 )
