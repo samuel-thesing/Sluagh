@@ -1,0 +1,11 @@
+.idea/
+.cache/
+build/
+cmake-build/
+cmake-build-debug/
+cmake-build-release/
+cmake-build-relwithdebinfo/
+compile_commands.json
+bin-int/
+bin/
+include/sluagh/export.h
