@@ -45,3 +45,25 @@ elseif (UNIX AND BUILD_SHARED)
     )
 endif ()
 
+copy_resources(
+    TARGET ${APP_TARGET_NAME}
+    TARGET_DIR "${PROJECT_BINARY_DIR}/rsc"
+    RESOURCE_DIR "${WORKSPACE_RESOURCE_DIR}"
+    EXCLUDE "${WORKSPACE_RESOURCE_DIR}/shader"
+)
+copy_resources(
+    TARGET ${APP_TARGET_NAME}
+    TARGET_DIR "${PROJECT_BINARY_DIR}/rsc"
+    RESOURCE_DIR "${PROJECT_RESOURCE_DIR}"
+    EXCLUDE "${PROJECT_RESOURCE_DIR}/shader"
+)
+compile_shaders(
+    TARGET ${APP_TARGET_NAME}
+    TARGET_DIR "${PROJECT_BINARY_DIR}/rsc/shader"
+    SHADER_DIR "${PROJECT_RESOURCE_DIR}/shader"
+)
+compile_shaders(
+    TARGET ${APP_TARGET_NAME}
+    TARGET_DIR "${PROJECT_BINARY_DIR}/rsc/shader"
+    SHADER_DIR "${WORKSPACE_RESOURCE_DIR}/shader"
+)

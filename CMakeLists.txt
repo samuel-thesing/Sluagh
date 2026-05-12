@@ -24,6 +24,7 @@ option(BUILD_SHARED "Build lib as shared" ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(Options)
 include(Dependencies)
+include(Utils)
 
 add_subdirectory(src)
 
