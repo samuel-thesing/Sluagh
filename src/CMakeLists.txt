@@ -14,6 +14,7 @@ endif ()
 add_library(${PROJECT_NAME} ${_lib_type}
     sluagh.cpp
     core/Application.cpp
+    render/utils.cpp
     utils/Logger.cpp
     utils/Arguments.cpp
 )

@@ -17,6 +17,9 @@ private:
 
 	SDL_GPUDevice *gpu_device;
 
+	SDL_GPUGraphicsPipeline* gpu_pipeline;
+	SDL_GPUBuffer* vertex_buffer;
+
 	bool quit = false;
 
 private:
