@@ -7,14 +7,26 @@ function(escape_regex INPUT OUTPUT)
 endfunction()
 
 function(copy_resources)
-    set(options "")
+    set(options "ONCE")
     set(oneValueArgs TARGET TARGET_DIR RESOURCE_DIR)
     set(multiValueArgs FILE_EXTENSIONS EXCLUDE)
     cmake_parse_arguments(PARSE_ARGV 0 arg
         "${options}" "${oneValueArgs}" "${multiValueArgs}"
     )
 
-    # fiel-glob for resource_dir with file-extensions
+    set(COPY_PAIR "${arg_RESOURCE_DIR},${arg_TARGET_DIR}")
+    get_property(LOCAL_COPIED_RESOURCES GLOBAL PROPERTY COPIED_RESOURCES)
+    list(FIND LOCAL_COPIED_RESOURCES "${COPY_PAIR}" COPY_PAIR_IDX)
+    if (${COPY_PAIR_IDX} GREATER_EQUAL 0)
+        if (NOT arg_ONCE)
+            message(WARNING "Tried to copy from '${arg_RESOURCE_DIR}' to '${arg_TARGET_DIR}' multiple times. Target '${arg_TARGET}', mode '${CMAKE_BUILD_TYPE}'")
+        endif()
+        return ()
+    endif()
+    list(APPEND LOCAL_COPIED_RESOURCES "${COPY_PAIR}")
+    set_property(GLOBAL PROPERTY COPIED_RESOURCES ${LOCAL_COPIED_RESOURCES})
+
+    # file-glob for resource_dir with file-extensions
     set(RESOURCE_PATTERNS "")
     list(LENGTH arg_FILE_EXTENSIONS COUNT_FILE_EXTENSIONS)
     if (${COUNT_FILE_EXTENSIONS} EQUAL 0) # no file-extension; take all
@@ -62,18 +74,33 @@ function(copy_resources)
     file(RELATIVE_PATH REL_RESOURCE_PATH "${WORKSPACE_DIR}" "${arg_RESOURCE_DIR}")
     string(REPLACE "/" "_" REL_RESOURCE_NAME "${REL_RESOURCE_PATH}")
 
-    set(CUSTOM_COPY_TARGET_NAME "copy_resources-${REL_RESOURCE_NAME}")
+    set(CUSTOM_COPY_TARGET_NAME "copy_resources-${REL_RESOURCE_NAME}-${CMAKE_BUILD_TYPE}")
     add_custom_target("${CUSTOM_COPY_TARGET_NAME}" ALL DEPENDS ${OUTPUT_FILES})
     add_dependencies("${arg_TARGET}" "${CUSTOM_COPY_TARGET_NAME}")
+    list(APPEND COPIED_RESOURCES "${arg_RESOURCE_DIR},${arg_TARGET_DIR}")
 endfunction()
 
+set(COPIED_SHADERS "")
 function(compile_shaders)
-    set(options "")
+    set(options "ONCE")
     set(oneValueArgs TARGET TARGET_DIR SHADER_DIR)
     set(multiValueArgs "")
     cmake_parse_arguments(PARSE_ARGV 0 arg
         "${options}" "${oneValueArgs}" "${multiValueArgs}"
     )
+
+    set(COPY_PAIR "${arg_SHADER_DIR},${arg_TARGET_DIR}")
+    get_property(LOCAL_COPIED_SHADERS GLOBAL PROPERTY COPIED_SHADERS)
+    list(FIND LOCAL_COPIED_SHADERS "${COPY_PAIR}" COPY_PAIR_IDX)
+    if (${COPY_PAIR_IDX} GREATER_EQUAL 0)
+        if (NOT arg_ONCE)
+            message(WARNING "Tried to compile shaders from '${arg_SHADER_DIR}' to '${arg_TARGET_DIR}' multiple times. Target '${arg_TARGET}', mode '${CMAKE_BUILD_TYPE}'")
+        endif()
+        return ()
+    endif()
+    list(APPEND LOCAL_COPIED_SHADERS "${COPY_PAIR}")
+    set_property(GLOBAL PROPERTY COPIED_SHADERS ${LOCAL_COPIED_SHADERS})
+
     file(GLOB_RECURSE SHADER_FILES
         "${arg_SHADER_DIR}/*.vert"
         "${arg_SHADER_DIR}/*.frag"
@@ -105,7 +132,7 @@ function(compile_shaders)
     file(RELATIVE_PATH REL_SHADER_DIR "${WORKSPACE_DIR}" "${arg_SHADER_DIR}")
     string(REPLACE "/" "_" REL_SHADER_NAME "${REL_SHADER_DIR}")
 
-    set(CUSTOM_SHADER_TARGET_NAME "compile_shaders-${REL_SHADER_NAME}")
+    set(CUSTOM_SHADER_TARGET_NAME "compile_shaders-${REL_SHADER_NAME}-${CMAKE_BUILD_TYPE}")
     add_custom_target("${CUSTOM_SHADER_TARGET_NAME}" ALL DEPENDS ${OUTPUT_FILES})
     add_dependencies("${arg_TARGET}" "${CUSTOM_SHADER_TARGET_NAME}")
 endfunction()
