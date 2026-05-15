@@ -109,37 +109,64 @@ Application::Application(const Config &config) {
 
 	SDL_GPUBufferCreateInfo vertex_buffer_create_info = {
 		.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-		.size = sizeof(PositionColorVertex) * 3
+		.size = sizeof(PositionColorVertex) * 4
 	};
 	vertex_buffer = SDL_CreateGPUBuffer(gpu_device, &vertex_buffer_create_info);
 
+	SDL_GPUBufferCreateInfo index_buffer_create_info = {
+		.usage = SDL_GPU_BUFFERUSAGE_INDEX,
+		.size = sizeof(uint16_t) * 6
+	};
+	index_buffer = SDL_CreateGPUBuffer(gpu_device, &index_buffer_create_info);
+
 	SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info = {
 		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-		.size = sizeof(PositionColorVertex) * 3
+		.size = sizeof(PositionColorVertex) * 4 + sizeof(uint16_t) * 6
 	};
 	SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(
 		gpu_device, &transfer_buffer_create_info);
-	auto* vertex_data = static_cast<PositionColorVertex *>(SDL_MapGPUTransferBuffer(gpu_device, transfer_buffer, false));
+	auto* transfer_data = static_cast<PositionColorVertex*>(SDL_MapGPUTransferBuffer(gpu_device, transfer_buffer, false));
 
-	vertex_data[0] = {-0.5, -0.5, 0, 1, 0, 0, 1};
-	vertex_data[1] = {0.5, -0.5, 0, 0, 1, 0, 1};
-	vertex_data[2] = {0, 0.5, 0, 0, 0, 1, 1};
+	transfer_data[0] = {0.5, 0.5, 0, 1, 1, 1, 1};
+	transfer_data[1] = {0.5, -0.5, 0, 0, 1, 0, 1};
+	transfer_data[2] = {-0.5, -0.5, 0, 1, 0, 0, 1};
+	transfer_data[3] = {-0.5, 0.5, 0, 0, 0, 1, 1};
+
+	auto* index_data = reinterpret_cast<uint16_t*>(&transfer_data[4]);
+	index_data[0] = 0;
+	index_data[1] = 1;
+	index_data[2] = 3;
+	index_data[3] = 1;
+	index_data[4] = 2;
+	index_data[5] = 3;
 
 	SDL_UnmapGPUTransferBuffer(gpu_device, transfer_buffer);
 
 	SDL_GPUCommandBuffer* upload_cmd_buf = SDL_AcquireGPUCommandBuffer(gpu_device);
 	SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(upload_cmd_buf);
 
-	SDL_GPUTransferBufferLocation transfer_loc = {
+	SDL_GPUTransferBufferLocation vertex_transfer_loc = {
 		.transfer_buffer = transfer_buffer,
 		.offset = 0
 	};
-	SDL_GPUBufferRegion buffer_region = {
+	SDL_GPUBufferRegion vertex_buffer_region = {
 		.buffer = vertex_buffer,
 		.offset = 0,
-		.size = sizeof(PositionColorVertex) * 3
+		.size = sizeof(PositionColorVertex) * 4
 	};
-	SDL_UploadToGPUBuffer(copy_pass, &transfer_loc, &buffer_region, false);
+	SDL_UploadToGPUBuffer(copy_pass, &vertex_transfer_loc, &vertex_buffer_region, false);
+
+	SDL_GPUTransferBufferLocation index_transfer_loc = {
+		.transfer_buffer = transfer_buffer,
+		.offset = sizeof(PositionColorVertex) * 4
+	};
+	SDL_GPUBufferRegion index_buffer_region = {
+		.buffer = index_buffer,
+		.offset = 0,
+		.size = sizeof(uint16_t) * 6
+	};
+	SDL_UploadToGPUBuffer(copy_pass, &index_transfer_loc, &index_buffer_region, false);
+
 	SDL_EndGPUCopyPass(copy_pass);
 	SDL_SubmitGPUCommandBuffer(upload_cmd_buf);
 	SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
@@ -193,12 +220,17 @@ void Application::onRender() {
 			SDL_BeginGPURenderPass(cmd_buf, &color_target, 1, nullptr);
 
 		SDL_BindGPUGraphicsPipeline(render_pass, gpu_pipeline);
-		SDL_GPUBufferBinding buffer_binding = {
+		SDL_GPUBufferBinding vertex_binding = {
 			.buffer = vertex_buffer,
-			.offset = 0,
+			.offset = 0
 		};
-		SDL_BindGPUVertexBuffers(render_pass, 0, &buffer_binding, 1);
-		SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
+		SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
+		SDL_GPUBufferBinding index_binding = {
+			.buffer = index_buffer,
+			.offset = 0
+		};
+		SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+		SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
 
 		SDL_EndGPURenderPass(render_pass);
 	}

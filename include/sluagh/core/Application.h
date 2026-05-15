@@ -19,6 +19,7 @@ private:
 
 	SDL_GPUGraphicsPipeline* gpu_pipeline;
 	SDL_GPUBuffer* vertex_buffer;
+	SDL_GPUBuffer* index_buffer;
 
 	bool quit = false;
 
