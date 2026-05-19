@@ -14,7 +14,10 @@ endif ()
 add_library(${PROJECT_NAME} ${_lib_type}
     sluagh.cpp
     core/Application.cpp
+    render/Renderer.cpp
+    render/Renderer2d.cpp
     render/utils.cpp
+    utils/Color.cpp
     utils/Logger.cpp
     utils/Arguments.cpp
 )

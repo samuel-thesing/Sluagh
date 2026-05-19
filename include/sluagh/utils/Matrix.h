@@ -35,7 +35,7 @@
 	}
 
 #define MATRIX_OP(op) \
-	Type operator op(Type const& o) {								\
+	Type operator op(Type const& o) const {							\
 		auto result = Type();										\
 		for (int i = 0; i < Rows * Cols; ++i) {						\
 			result.data[i] = static_cast<T>(data[i] op o.data[i]);	\

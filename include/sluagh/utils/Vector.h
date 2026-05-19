@@ -1,6 +1,7 @@
 #ifndef SLUAGH_VECTOR_H
 #define SLUAGH_VECTOR_H
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 
 template <typename T, typename U>
@@ -13,21 +14,21 @@ concept supportsArithmetics = requires(T t, U u) {
 };
 
 #define VECTOR_OP_SCALAR(op) \
-	template <typename U> requires supportsArithmetics<T, U>				\
-	Type operator op(U const scalar) {										\
-		auto result = Type();												\
-		for (int i = 0; i < Rows; ++i) {									\
-			result.data[i] = static_cast<T>(data[i] op scalar);				\
-		}																	\
-		return result;														\
-	}																		\
-	template <typename U> requires supportsArithmetics<T, U>				\
-	friend Type operator op(U const scalar, const Vector<Rows, U>& v) {		\
-		auto result = Type();												\
-		for (int i = 0; i < Rows; ++i) {									\
-			result.data[i] = static_cast<T>(scalar op v.data[i]);			\
-		}																	\
-		return result;														\
+	template <typename U> requires supportsArithmetics<T, U>			\
+	Type operator op(U const scalar) const {							\
+		auto result = Type();											\
+		for (int i = 0; i < Rows; ++i) {								\
+			result.data[i] = static_cast<T>(data[i] op scalar);			\
+		}																\
+		return result;													\
+	}																	\
+	template <typename U> requires supportsArithmetics<T, U>			\
+	friend Type operator op(U const scalar, const Vector<Rows, U>& v) {	\
+		auto result = Type();											\
+		for (int i = 0; i < Rows; ++i) {								\
+			result.data[i] = static_cast<T>(scalar op v.data[i]);		\
+		}																\
+		return result;													\
 	}
 
 #define VECTOR_OP_EQUAL_SCALAR(op) \
@@ -40,7 +41,7 @@ concept supportsArithmetics = requires(T t, U u) {
 	}
 
 #define VECTOR_OP(op) \
-	Type operator op(Type const& o) {								\
+	Type operator op(Type const& o) const {							\
 		auto result = Type();										\
 		for (int i = 0; i < Rows; ++i) {							\
 			result.data[i] = static_cast<T>(data[i] op o.data[i]);	\
@@ -71,7 +72,7 @@ public:
 	Vector(Ts... elements)
 		: data{static_cast<T>(elements)...} {}
 
-	explicit Vector(Type const& o) : data{} {
+	Vector(Type const& o) : data{} {
 		std::memcpy(data, o.data, sizeof(T) * Rows);
 	}
 
@@ -143,6 +144,13 @@ public:
 		return result;
 	}
 
+	Type cross() const requires (Rows == 2) {
+		auto result = Type();
+		result.x() = data[1];
+		result.y() = -data[0];
+		return result;
+	}
+
 	double norm() const {
 		double sum = 0;
 		for (int i = 0; i < Rows; ++i) {
@@ -158,8 +166,29 @@ public:
 		}
 		return result;
 	}
+
+	Type normalized() const {
+		auto len = norm();
+		auto result = Type();
+		for (int i = 0; i < Rows; ++i) {
+			result.data[i] = static_cast<T>(data[i] / len);
+		}
+		return result;
+	}
 };
 
+typedef Vector<2, int32_t> Vec2i;
+typedef Vector<3, int32_t> Vec3i;
+typedef Vector<4, int32_t> Vec4i;
+typedef Vector<2, uint32_t> Vec2u;
+typedef Vector<3, uint32_t> Vec3u;
+typedef Vector<4, uint32_t> Vec4u;
+typedef Vector<2, int64_t> Vec2l;
+typedef Vector<3, int64_t> Vec3l;
+typedef Vector<4, int64_t> Vec4l;
+typedef Vector<2, uint64_t> Vec2ul;
+typedef Vector<3, uint64_t> Vec3ul;
+typedef Vector<4, uint64_t> Vec4ul;
 typedef Vector<2, float> Vec2f;
 typedef Vector<3, float> Vec3f;
 typedef Vector<4, float> Vec4f;

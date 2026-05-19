@@ -12,8 +12,12 @@ Color::Color(int r, int g, int b, int a)
 Color::Color(float r, float g, float b, float a)
 	: r(r), g(g), b(b), a(a) {}
 
-Vec4 Color::toVec() const {
-	return Vec4(r, g, b, a);
+Vec3f Color::toVec3() const {
+	return {r, g, b};
+}
+
+Vec4f Color::toVec4() const {
+	return {r, g, b, a};
 }
 
 Color Color::withAlpha(float alpha) const {
