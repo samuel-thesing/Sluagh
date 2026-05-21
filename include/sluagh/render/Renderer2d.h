@@ -14,13 +14,15 @@
 class Renderer2d;
 struct RenderCommand2d {
 	unsigned position_count;
-	unsigned index_count;
+	uint16_t index_count;
 	Vec2f* positions;
 	uint16_t* indices;
 	Color color;
 	// texture
 
-	RenderCommand2d(uint32_t position_count, uint32_t index_count);
+	RenderCommand2d(uint32_t position_count, uint16_t index_count);
+	RenderCommand2d(RenderCommand2d&& o) noexcept;
+	~RenderCommand2d();
 };
 
 class RenderPass2d : public RenderPass {
@@ -30,22 +32,24 @@ private:
 
 public:
 	RenderPass2d(Renderer2d* renderer, int z);
-	~RenderPass2d() override;
+	~RenderPass2d() override = default;
 
-	void addCommand(RenderCommand2d command);
+	void addCommand(RenderCommand2d&& command);
+
+	const std::vector<RenderCommand2d>& getRenderCommands() const { return render_commands; };
 
 	void render() override;
 };
 
-class Renderer2d : public Renderer {
+class SLUAGH_EXPORT Renderer2d : public Renderer {
 private:
 	SDL_GPUDevice* gpu_device;
 
 	SDL_GPUGraphicsPipeline* pipeline;
 	SDL_GPUBuffer* vertex_buffer;
 	SDL_GPUBuffer* index_buffer;
+	SDL_GPUTransferBuffer* transfer_buffer;
 
-	std::vector<RenderPass2d*> render_passes;
 	std::vector<RenderPass2d*> render_pass_stack;
 
 	Color color;
@@ -57,14 +61,16 @@ private:
 	friend class RenderPass2d;
 	void renderPass(RenderPass2d* pass);
 
-	void flush(uint32_t count_vertices, uint32_t count_indices);
+	void flush(SDL_GPUTexture* target_texture,
+		const std::vector<RenderCommand2d>& commands, uint32_t offset,
+		uint32_t command_count, uint32_t count_vertices, uint32_t count_indices);
 
 public:
 	Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_format);
 	~Renderer2d() override;
 
 	void beginPass(int z = 0);
-	void endPassWindow(/*TODO Multi-window*/);
+	void endPassWindow(SDL_GPUTexture* window_texture/*TODO Multi-window*/);
 	void endPassTexture(/*TODO texture class*/);
 
 	void setColor(Color color);

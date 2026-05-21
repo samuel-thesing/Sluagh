@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 
 #include "sluagh/export.h"
+#include "sluagh/render/Renderer2d.h"
 #include "sluagh/utils/Arguments.h"
 
 class SLUAGH_EXPORT Application {
@@ -16,10 +17,7 @@ private:
 	SDL_Window *window;
 
 	SDL_GPUDevice *gpu_device;
-
-	SDL_GPUGraphicsPipeline* gpu_pipeline;
-	SDL_GPUBuffer* vertex_buffer;
-	SDL_GPUBuffer* index_buffer;
+	Renderer2d* renderer2d;
 
 	bool quit = false;
 

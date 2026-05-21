@@ -8,14 +8,34 @@ struct PositionColorVertex {
 	Vec4f color;
 };
 
-RenderCommand2d::RenderCommand2d(uint32_t position_count, uint32_t index_count)
+RenderCommand2d::RenderCommand2d(uint32_t position_count, uint16_t index_count)
 	: position_count(position_count), index_count(index_count), color(Colors::MAGENTA) {
 	positions = new Vec2f[position_count];
 	indices = new uint16_t[index_count];
 }
+RenderCommand2d::RenderCommand2d(RenderCommand2d &&o) noexcept {
+	positions = o.positions;
+	indices = o.indices;
+	o.positions = nullptr;
+	o.indices = nullptr;
 
-void RenderPass2d::addCommand(RenderCommand2d command) {
-	render_commands.emplace_back(std::move(command));
+	color = o.color;
+	position_count = o.position_count;
+	index_count = o.index_count;
+}
+
+RenderCommand2d::~RenderCommand2d() {
+	delete[] positions;
+	delete[] indices;
+}
+
+RenderPass2d::RenderPass2d(Renderer2d *renderer, int z)
+	: renderer{renderer} {
+	z_index = z;
+}
+
+void RenderPass2d::addCommand(RenderCommand2d&& command) {
+	render_commands.push_back(std::move(command));
 }
 
 void RenderPass2d::render() {
@@ -23,41 +43,70 @@ void RenderPass2d::render() {
 }
 
 void Renderer2d::renderPass(RenderPass2d *pass) {
-	// actual render logic:
-	// convert RenderCommands to buffers and such
-	// transfer buffers
-	// render
+	const auto& target = pass->getRenderTarget();
+	const auto& commands = pass->getRenderCommands();
+	uint32_t count_vertices = 0;
+	uint32_t count_indices = 0;
+	uint32_t last_flush_index = 0;
+	for (uint32_t i = 0; i < commands.size(); i++) {
+		if (count_vertices + commands[i].position_count >= MAX_VERTICES_PER_BATCH
+			|| count_indices + commands[i].index_count >= MAX_INDICES_PER_BATCH) {
+
+			flush(
+				target.texture,
+				commands,
+				last_flush_index,
+				i - last_flush_index,
+				count_vertices - commands[i].position_count,
+				count_indices - commands[i].index_count
+			);
+			last_flush_index = i;
+			count_vertices = 0;
+			count_indices = 0;
+		}
+
+		count_vertices += commands[i].position_count;
+		count_indices += commands[i].index_count;
+	}
+
+	if (count_vertices != 0 || count_indices != 0) {
+		flush(
+			target.texture,
+			commands,
+			last_flush_index,
+			static_cast<uint32_t>(commands.size() - last_flush_index),
+			count_vertices,
+			count_indices
+		);
+	}
 }
 
-void Renderer2d::flush(RenderPassuint32_t count_vertices, uint32_t count_indices) {
-	SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info = {
-		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-		.size = static_cast<uint32_t>(sizeof(PositionColorVertex) * count_vertices
-			+ sizeof(uint16_t) * count_indices)
-	};
-	SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(
-		gpu_device, &transfer_buffer_create_info);
-	auto* transfer_data = static_cast<PositionColorVertex*>(SDL_MapGPUTransferBuffer(gpu_device, transfer_buffer, false));
+void Renderer2d::flush(SDL_GPUTexture* target_texture,
+		const std::vector<RenderCommand2d>& commands,
+		uint32_t offset, uint32_t command_count,
+		uint32_t count_vertices, uint32_t count_indices) {
+	auto* transfer_data = static_cast<PositionColorVertex*>(SDL_MapGPUTransferBuffer(gpu_device, transfer_buffer, true));
 	auto* index_data = reinterpret_cast<uint16_t*>(&transfer_data[count_vertices]);
 
-	for (const auto& command : render_)
+	uint32_t vertex_i = 0;
+	uint32_t index_i = 0;
+	uint16_t index_offset = 0;
+	for (uint32_t i = offset; i < offset + command_count; i++) {
+		const auto& command = commands[i];
+		for (uint32_t j = 0; j < command.position_count; j++, vertex_i++) {
+			transfer_data[vertex_i].pos = command.positions[j];
+			transfer_data[vertex_i].color = command.color.toVec4();
+		}
 
-	transfer_data[0] = {0.5, 0.5, 0, 1, 1, 1, 1};
-	transfer_data[1] = {0.5, -0.5, 0, 0, 1, 0, 1};
-	transfer_data[2] = {-0.5, -0.5, 0, 1, 0, 0, 1};
-	transfer_data[3] = {-0.5, 0.5, 0, 0, 0, 1, 1};
-
-	index_data[0] = 0;
-	index_data[1] = 1;
-	index_data[2] = 3;
-	index_data[3] = 1;
-	index_data[4] = 2;
-	index_data[5] = 3;
+		for (uint32_t j = 0; j < command.index_count; j++, index_i++) {
+			index_data[index_i] = index_offset + command.indices[j];
+		}
+		index_offset += command.index_count;
+	}
 
 	SDL_UnmapGPUTransferBuffer(gpu_device, transfer_buffer);
 
-	SDL_GPUCommandBuffer* upload_cmd_buf = SDL_AcquireGPUCommandBuffer(gpu_device);
-	SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(upload_cmd_buf);
+	SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
 
 	SDL_GPUTransferBufferLocation vertex_transfer_loc = {
 		.transfer_buffer = transfer_buffer,
@@ -66,22 +115,48 @@ void Renderer2d::flush(RenderPassuint32_t count_vertices, uint32_t count_indices
 	SDL_GPUBufferRegion vertex_buffer_region = {
 		.buffer = vertex_buffer,
 		.offset = 0,
-		.size = sizeof(PositionColorVertex) * 4
+		.size = static_cast<uint32_t>(sizeof(PositionColorVertex) * count_vertices)
 	};
 	SDL_UploadToGPUBuffer(copy_pass, &vertex_transfer_loc, &vertex_buffer_region, false);
 
 	SDL_GPUTransferBufferLocation index_transfer_loc = {
 		.transfer_buffer = transfer_buffer,
-		.offset = sizeof(PositionColorVertex) * 4
+		.offset = static_cast<uint32_t>(sizeof(PositionColorVertex) * count_vertices)
 	};
 	SDL_GPUBufferRegion index_buffer_region = {
 		.buffer = index_buffer,
 		.offset = 0,
-		.size = sizeof(uint16_t) * 6
+		.size = static_cast<uint32_t>(sizeof(uint16_t) * count_indices)
 	};
-	SDL_UploadToGPUBuffer(copy_pass, &index_transfer_loc, &index_buffer_region, false);
+	SDL_UploadToGPUBuffer(copy_pass, &index_transfer_loc, &index_buffer_region, true);
 
 	SDL_EndGPUCopyPass(copy_pass);
+
+	// render pass for
+	SDL_GPUColorTargetInfo color_target = {0};
+	color_target.mip_level = 0;
+	color_target.texture = target_texture;
+	color_target.clear_color = SDL_FColor{0.f, 0.f, 0.f, 1.f};
+	color_target.load_op = SDL_GPU_LOADOP_LOAD;
+	color_target.store_op = SDL_GPU_STOREOP_STORE;
+
+	SDL_GPURenderPass *render_pass =
+			SDL_BeginGPURenderPass(command_buffer, &color_target, 1, nullptr);
+
+	SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
+	SDL_GPUBufferBinding vertex_binding = {
+		.buffer = vertex_buffer,
+		.offset = 0
+	};
+	SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
+	SDL_GPUBufferBinding index_binding = {
+		.buffer = index_buffer,
+		.offset = 0
+	};
+	SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+	SDL_DrawGPUIndexedPrimitives(render_pass, count_indices, 1, 0, 0, 0);
+
+	SDL_EndGPURenderPass(render_pass);
 }
 
 Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_format)
@@ -164,20 +239,36 @@ Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_fo
 		.size = static_cast<uint32_t>(sizeof(uint16_t) * MAX_INDICES_PER_BATCH)
 	};
 	index_buffer = SDL_CreateGPUBuffer(gpu_device, &index_buffer_create_info);
+
+	SDL_GPUTransferBufferCreateInfo transfer_buffer_create_info = {
+		.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+		.size = static_cast<uint32_t>(sizeof(PositionColorVertex) * MAX_VERTICES_PER_BATCH
+			+ sizeof(uint16_t) * MAX_INDICES_PER_BATCH)
+	};
+	transfer_buffer = SDL_CreateGPUTransferBuffer(
+		gpu_device, &transfer_buffer_create_info);
 }
 
-Renderer2d::~Renderer2d() {}
+Renderer2d::~Renderer2d() {
+	SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
+	SDL_ReleaseGPUBuffer(gpu_device, vertex_buffer);
+	SDL_ReleaseGPUBuffer(gpu_device, index_buffer);
+	SDL_ReleaseGPUGraphicsPipeline(gpu_device, pipeline);
+}
 
 void Renderer2d::beginPass(int z) {
 	render_pass_stack.push_back(new RenderPass2d(this, z));
 }
-void Renderer2d::endPassWindow() {
+void Renderer2d::endPassWindow(SDL_GPUTexture* window_texture) {
 	auto* pass = render_pass_stack.back();
 	render_pass_stack.pop_back();
 
 	// TODO fetch window size
-	pass->setRenderTarget(RenderTargetType::Window, Vec2i(800, 600));
+	pass->setRenderTarget(RenderTargetType::Window, Vec2i(800, 600), window_texture);
 	insertRenderPass(pass);
+}
+void Renderer2d::endPassTexture() {
+
 }
 
 void Renderer2d::setColor(Color new_color) {
@@ -203,7 +294,7 @@ void Renderer2d::drawLine(Vec2f start, Vec2f end, float thickness) {
 	command.indices[4] = 2;
 	command.indices[5] = 3;
 
-	render_pass_stack.back()->addCommand(command);
+	render_pass_stack.back()->addCommand(std::move(command));
 }
 
 void Renderer2d::fillRect(Vec2f pos, Vec2f size) {
@@ -221,5 +312,5 @@ void Renderer2d::fillRect(Vec2f pos, Vec2f size) {
 	command.indices[3] = 1;
 	command.indices[4] = 2;
 	command.indices[5] = 3;
-	render_passes.back()->addCommand(command);
+	render_pass_stack.back()->addCommand(std::move(command));
 }

@@ -1,6 +1,7 @@
 #ifndef SLUAGH_COLOR_H
 #define SLUAGH_COLOR_H
 
+#include "sluagh/export.h"
 #include "Vector.h"
 
 #define DECLARE_COLOR(name, r, g, b) const Color name = Color(r, g, b);
@@ -9,7 +10,7 @@
 
 #include <cstdint>
 
-struct Color {
+struct SLUAGH_EXPORT Color {
 	float r, g, b;
 	float a = 1.f;
 

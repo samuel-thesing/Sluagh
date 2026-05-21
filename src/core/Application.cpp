@@ -27,7 +27,7 @@ Application::Application(const Config &config) {
 		throw std::runtime_error("Failed to create window");
 	}
 
-	gpu_device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL, true, nullptr);
+	gpu_device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
 	if (gpu_device == nullptr) {
 		Logger::critical("Failed to create GPU device: {}", SDL_GetError());
 		throw std::runtime_error("Failed to create GPU device");
@@ -38,17 +38,13 @@ Application::Application(const Config &config) {
 		throw std::runtime_error("Failed to claim window for GPU device");
 	}
 
+	renderer2d = new Renderer2d(gpu_device, SDL_GetGPUSwapchainTextureFormat(gpu_device, window));
+
 	Logger::trace("Finished initializing application");
 
-
-	SDL_SubmitGPUCommandBuffer(upload_cmd_buf);
-	SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
 }
 
 Application::~Application() {
-	SDL_ReleaseGPUGraphicsPipeline(gpu_device, gpu_pipeline);
-	SDL_ReleaseGPUBuffer(gpu_device, vertex_buffer);
-
 	SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
 	SDL_DestroyGPUDevice(gpu_device);
 	SDL_DestroyWindow(window);
@@ -85,27 +81,24 @@ void Application::onRender() {
 		SDL_GPUColorTargetInfo color_target = {0};
 		color_target.mip_level = 0;
 		color_target.texture = swapchain_texture;
-		color_target.clear_color = SDL_FColor{0.2f, 0.6f, 0.8f, 1.0f};
+		color_target.clear_color = SDL_FColor{0.f, 0.f, 0.f, 1.0f};
 		color_target.load_op = SDL_GPU_LOADOP_CLEAR;
 		color_target.store_op = SDL_GPU_STOREOP_STORE;
 
 		SDL_GPURenderPass *render_pass =
 			SDL_BeginGPURenderPass(cmd_buf, &color_target, 1, nullptr);
-
-		SDL_BindGPUGraphicsPipeline(render_pass, gpu_pipeline);
-		SDL_GPUBufferBinding vertex_binding = {
-			.buffer = vertex_buffer,
-			.offset = 0
-		};
-		SDL_BindGPUVertexBuffers(render_pass, 0, &vertex_binding, 1);
-		SDL_GPUBufferBinding index_binding = {
-			.buffer = index_buffer,
-			.offset = 0
-		};
-		SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
-		SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
-
 		SDL_EndGPURenderPass(render_pass);
+
+		renderer2d->setCommandBuffer(cmd_buf);
+
+		renderer2d->beginPass();
+
+		renderer2d->setColor(Colors::BLUE);
+		renderer2d->fillRect({0.f, 0.f}, {0.5f, 0.5f});
+
+		renderer2d->endPassWindow(swapchain_texture);
+
+		renderer2d->renderAll();
 	}
 	SDL_SubmitGPUCommandBuffer(cmd_buf);
 }
