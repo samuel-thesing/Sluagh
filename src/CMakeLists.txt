@@ -14,6 +14,7 @@ endif ()
 add_library(${PROJECT_NAME} ${_lib_type}
     sluagh.cpp
     core/Application.cpp
+    core/Window.cpp
     render/Renderer.cpp
     render/Renderer2d.cpp
     render/utils.cpp

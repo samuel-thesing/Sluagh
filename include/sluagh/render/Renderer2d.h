@@ -30,13 +30,16 @@ private:
 	Renderer2d* renderer;
 	std::vector<RenderCommand2d> render_commands;
 
+	int z_index = 0;
+
 public:
-	RenderPass2d(Renderer2d* renderer, int z);
+	RenderPass2d(RenderTarget* target, Renderer2d* renderer, int z);
 	~RenderPass2d() override = default;
 
 	void addCommand(RenderCommand2d&& command);
-
 	const std::vector<RenderCommand2d>& getRenderCommands() const { return render_commands; };
+
+	int getZIndex() const { return z_index; }
 
 	void render() override;
 };
@@ -61,7 +64,7 @@ private:
 	friend class RenderPass2d;
 	void renderPass(RenderPass2d* pass);
 
-	void flush(SDL_GPUTexture* target_texture,
+	void flush(RenderTarget* target, int z_index,
 		const std::vector<RenderCommand2d>& commands, uint32_t offset,
 		uint32_t command_count, uint32_t count_vertices, uint32_t count_indices);
 
@@ -70,8 +73,8 @@ public:
 	~Renderer2d() override;
 
 	void beginPass(int z = 0);
-	void endPassWindow(SDL_GPUTexture* window_texture/*TODO Multi-window*/);
-	void endPassTexture(/*TODO texture class*/);
+	void beginPass(RenderTarget* target, int z = 0);
+	void endPass();
 
 	void setColor(Color color);
 

@@ -1,10 +1,11 @@
 #include "sluagh/render/Renderer2d.h"
 
+#include "sluagh/core/Application.h"
 #include "sluagh/render/utils.h"
 #include "sluagh/utils/Logger.h"
 
 struct PositionColorVertex {
-	Vec2f pos;
+	Vec3f pos;
 	Vec4f color;
 };
 
@@ -29,8 +30,8 @@ RenderCommand2d::~RenderCommand2d() {
 	delete[] indices;
 }
 
-RenderPass2d::RenderPass2d(Renderer2d *renderer, int z)
-	: renderer{renderer} {
+RenderPass2d::RenderPass2d(RenderTarget* target, Renderer2d *renderer, int z)
+	: RenderPass(target), renderer{renderer} {
 	z_index = z;
 }
 
@@ -43,7 +44,7 @@ void RenderPass2d::render() {
 }
 
 void Renderer2d::renderPass(RenderPass2d *pass) {
-	const auto& target = pass->getRenderTarget();
+	auto* target = pass->getRenderTarget();
 	const auto& commands = pass->getRenderCommands();
 	uint32_t count_vertices = 0;
 	uint32_t count_indices = 0;
@@ -53,7 +54,8 @@ void Renderer2d::renderPass(RenderPass2d *pass) {
 			|| count_indices + commands[i].index_count >= MAX_INDICES_PER_BATCH) {
 
 			flush(
-				target.texture,
+				target,
+				pass->getZIndex(),
 				commands,
 				last_flush_index,
 				i - last_flush_index,
@@ -71,7 +73,8 @@ void Renderer2d::renderPass(RenderPass2d *pass) {
 
 	if (count_vertices != 0 || count_indices != 0) {
 		flush(
-			target.texture,
+			target,
+			pass->getZIndex(),
 			commands,
 			last_flush_index,
 			static_cast<uint32_t>(commands.size() - last_flush_index),
@@ -81,7 +84,7 @@ void Renderer2d::renderPass(RenderPass2d *pass) {
 	}
 }
 
-void Renderer2d::flush(SDL_GPUTexture* target_texture,
+void Renderer2d::flush(RenderTarget* target, int z_index,
 		const std::vector<RenderCommand2d>& commands,
 		uint32_t offset, uint32_t command_count,
 		uint32_t count_vertices, uint32_t count_indices) {
@@ -94,7 +97,11 @@ void Renderer2d::flush(SDL_GPUTexture* target_texture,
 	for (uint32_t i = offset; i < offset + command_count; i++) {
 		const auto& command = commands[i];
 		for (uint32_t j = 0; j < command.position_count; j++, vertex_i++) {
-			transfer_data[vertex_i].pos = command.positions[j];
+			transfer_data[vertex_i].pos = {
+				command.positions[j].x(),
+				command.positions[j].y(),
+				static_cast<float>(z_index)
+			};
 			transfer_data[vertex_i].color = command.color.toVec4();
 		}
 
@@ -133,15 +140,23 @@ void Renderer2d::flush(SDL_GPUTexture* target_texture,
 	SDL_EndGPUCopyPass(copy_pass);
 
 	// render pass for
-	SDL_GPUColorTargetInfo color_target = {0};
-	color_target.mip_level = 0;
-	color_target.texture = target_texture;
-	color_target.clear_color = SDL_FColor{0.f, 0.f, 0.f, 1.f};
-	color_target.load_op = SDL_GPU_LOADOP_LOAD;
-	color_target.store_op = SDL_GPU_STOREOP_STORE;
+	SDL_GPUColorTargetInfo color_target = {
+		.texture = target->getTexture(),
+		.mip_level = 0,
+		.clear_color = SDL_FColor{0.f, 0.f, 0.f, 1.f},
+		.load_op = SDL_GPU_LOADOP_LOAD,
+		.store_op = SDL_GPU_STOREOP_STORE,
+	};
 
-	SDL_GPURenderPass *render_pass =
-			SDL_BeginGPURenderPass(command_buffer, &color_target, 1, nullptr);
+	SDL_GPUDepthStencilTargetInfo depth_target = {
+		.texture = target->getDepthBuffer(),
+		.load_op = SDL_GPU_LOADOP_LOAD,
+		.store_op = SDL_GPU_STOREOP_STORE,
+	};
+
+	SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(
+		command_buffer, &color_target, 1, &depth_target
+	);
 
 	SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
 	SDL_GPUBufferBinding vertex_binding = {
@@ -192,14 +207,14 @@ Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_fo
 		{
 			.location = 0,
 			.buffer_slot = 0,
-			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
 			.offset = 0
 		},
 		{
 			.location = 1,
 			.buffer_slot = 0,
 			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-			.offset = sizeof(float) * 2
+			.offset = sizeof(float) * 3
 		}
 	};
 
@@ -213,9 +228,16 @@ Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_fo
 			.num_vertex_attributes = 2,
 		},
 		.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+		.depth_stencil_state = {
+			.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL,
+			.enable_depth_test = true,
+			.enable_depth_write = true
+		},
 		.target_info = {
 			.color_target_descriptions = &color_target,
-			.num_color_targets = 1
+			.num_color_targets = 1,
+			.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
+			.has_depth_stencil_target = true
 		}
 	};
 
@@ -255,20 +277,19 @@ Renderer2d::~Renderer2d() {
 	SDL_ReleaseGPUBuffer(gpu_device, index_buffer);
 	SDL_ReleaseGPUGraphicsPipeline(gpu_device, pipeline);
 }
-
 void Renderer2d::beginPass(int z) {
-	render_pass_stack.push_back(new RenderPass2d(this, z));
+	render_pass_stack.push_back(new RenderPass2d(
+		Application::getMainWindow()->getRenderTarget(), this, z
+	));
 }
-void Renderer2d::endPassWindow(SDL_GPUTexture* window_texture) {
+
+void Renderer2d::beginPass(RenderTarget* target, int z) {
+	render_pass_stack.push_back(new RenderPass2d(target, this,  z));
+}
+void Renderer2d::endPass() {
 	auto* pass = render_pass_stack.back();
+	addRenderPass(pass);
 	render_pass_stack.pop_back();
-
-	// TODO fetch window size
-	pass->setRenderTarget(RenderTargetType::Window, Vec2i(800, 600), window_texture);
-	insertRenderPass(pass);
-}
-void Renderer2d::endPassTexture() {
-
 }
 
 void Renderer2d::setColor(Color new_color) {
