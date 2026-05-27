@@ -27,17 +27,20 @@ private:
 private:
 	static Application *instance;
 
-	Application(const Config &config);
+	Application();
 	~Application();
 
 public:
-	static Application *create(Application::Config config);
+	static Application *create();
+	void start();
 	static void destroy();
 
 	static SDL_GPUDevice* getGPUDevice() {
 		return instance->gpu_device;
 	};
 	static Window* getMainWindow() { return instance->windows[instance->main_window]; }
+
+	void addWindow(Window* window);
 
 	void onEvent(SDL_Event *event);
 	void onRender();

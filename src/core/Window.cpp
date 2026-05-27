@@ -12,6 +12,8 @@ Window::Window(const std::string& title, Vec2i size)
 		throw std::runtime_error("Failed to create window");
 	}
 
+	window_id = SDL_GetWindowID(sdl_window);
+
 	if (!SDL_ClaimWindowForGPUDevice(Application::getGPUDevice(), sdl_window)) {
 		Logger::critical("Failed to claim window '{}' for GPU device", title);
 		throw std::runtime_error("Failed to claim window for GPU device");

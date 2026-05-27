@@ -33,6 +33,8 @@ SDL_AppResult SDL_AppInit(void **_context, int argc, char **argv) {
 		return SDL_APP_SUCCESS;
 	}
 
+	app->start();
+
 	*_context = app;
 
 	Logger::trace("Finished system initializion");

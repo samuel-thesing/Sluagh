@@ -16,7 +16,9 @@ Application *createApplication(Arguments args) {
 	}
 #endif
 
-	auto app = Application::create({"Sluagh"});
+	auto app = Application::create();
+	app->addWindow(new Window("Sluagh", {800, 600}));
+	app->addWindow(new Window("Sluagh 2", {800, 600}));
 
 	return app;
 }

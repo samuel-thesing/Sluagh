@@ -5,9 +5,18 @@
 
 Application *Application::instance = nullptr;
 
-Application *Application::create(Config config) {
-	new Application(config);
+Application *Application::create() {
+	new Application();
 	return instance;
+}
+void Application::start() {
+	instance->renderer2d = new Renderer2d(
+		instance->gpu_device,
+		SDL_GetGPUSwapchainTextureFormat(
+			instance->gpu_device,
+			getMainWindow()->getSDLWindow()
+		)
+	);
 }
 
 void Application::destroy() {
@@ -20,7 +29,7 @@ struct PositionColorVertex {
 	float r, g, b, a;
 };
 
-Application::Application(const Config &config) {
+Application::Application() {
 	instance = this;
 
 	gpu_device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
@@ -30,22 +39,47 @@ Application::Application(const Config &config) {
 	}
 
 	main_window = 0;
-	windows.push_back(new Window(config.title, {800, 600}));
-
-	renderer2d = new Renderer2d(gpu_device, SDL_GetGPUSwapchainTextureFormat(gpu_device, getMainWindow()->getSDLWindow()));
 
 	Logger::trace("Finished initializing application");
-
 }
 
 Application::~Application() {
 	SDL_DestroyGPUDevice(gpu_device);
 }
 
+void Application::addWindow(Window *window) {
+	windows.push_back(window);
+}
+
 void Application::onEvent(SDL_Event *event) {
 	if (event->type == SDL_EVENT_QUIT) {
 		quit = true;
 		return;
+	}
+
+	if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+		auto window_id = event->window.windowID;
+		uint32_t window_idx = -1u;
+		for (uint32_t i = 0; i < windows.size(); i++) {
+			if (windows[i]->getWindowId() == window_id) {
+				window_idx = i;
+				break;
+			}
+		}
+		if (window_idx == -1u) {
+			Logger::error("Received window close-request for window not managed by application");
+			return;
+		}
+
+		if (main_window == window_idx && windows.size() != 1) {
+			Logger::error("Close the main window last or switch the main window before closing");
+			main_window = 0;
+		}
+		delete windows[window_idx];
+		windows.erase(windows.begin() + window_idx);
+		if (window_idx < main_window) {
+			main_window--;
+		}
 	}
 
 	if (event->type == SDL_EVENT_KEY_UP) {
@@ -63,6 +97,10 @@ void Application::onRender() {
 	}
 	for (auto* window : windows) {
 		window->startRenderFrame(cmd_buf);
+	}
+
+	if (windows.empty()) {
+		return;
 	}
 
 	renderer2d->setCommandBuffer(cmd_buf);
