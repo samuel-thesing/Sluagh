@@ -24,11 +24,6 @@ void Application::destroy() {
 	instance = nullptr;
 }
 
-struct PositionColorVertex {
-	float x, y, z;
-	float r, g, b, a;
-};
-
 Application::Application() {
 	instance = this;
 
@@ -105,14 +100,14 @@ void Application::onRender() {
 
 	renderer2d->setCommandBuffer(cmd_buf);
 
-	renderer2d->beginPass();
-	renderer2d->setColor(Colors::AQUAMARINE);
-	renderer2d->fillRect({-0.1f, -0.1f}, {0.2f, 0.2f});
+	renderer2d->beginPass(1);
+	renderer2d->setColor(Colors::RED);
+	renderer2d->drawLine({0.f, 0.f}, {200.f, 200.f}, 5.f);
 	renderer2d->endPass();
 
-	renderer2d->beginPass(1);
-	renderer2d->setColor(Colors::IVORY);
-	renderer2d->fillRect({0.f, 0.f}, {0.5f, 0.5f});
+	renderer2d->beginPass();
+	renderer2d->setColor(Colors::AQUAMARINE);
+	renderer2d->fillRect({50.f, 100.f}, {100.f, 50.f});
 	renderer2d->endPass();
 
 	renderer2d->renderAll();

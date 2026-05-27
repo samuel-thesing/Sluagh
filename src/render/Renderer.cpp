@@ -16,6 +16,8 @@ RenderTarget::RenderTarget(RenderTargetType type, Vec2i size,
 		.num_levels = 1
 	};
 	depth_buffer = SDL_CreateGPUTexture(Application::getGPUDevice(), &depth_texture_info);
+
+	projection_matrix = Mat4f::ortho(0.f, static_cast<float>(size.x()), static_cast<float>(size.y()), 0.f, 100.f, 0.f);
 }
 RenderTarget::~RenderTarget() {
 	SDL_ReleaseGPUTexture(Application::getGPUDevice(), depth_buffer);

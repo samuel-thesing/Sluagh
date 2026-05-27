@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "sluagh/utils/Color.h"
+#include "sluagh/utils/Matrix.h"
 #include "sluagh/utils/Vector.h"
 
 #include <stack>

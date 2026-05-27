@@ -85,7 +85,11 @@ public:
 		}(), ...);
 	}
 
-	explicit Matrix(Type const& o) : data{} {
+	Matrix(Type const& o) : data{} {
+		std::memcpy(data, o.data, sizeof(T) * Rows * Cols);
+	}
+
+	explicit Matrix(Type& o) : data{} {
 		std::memcpy(data, o.data, sizeof(T) * Rows * Cols);
 	}
 
@@ -178,12 +182,12 @@ public:
 		return result;
 	}
 
-	Vector<Rows, T> operator*(const Vector<Cols, T>& o) {
+	Vector<Rows, T> operator*(const Vector<Cols, T>& o) const {
 		auto result = Vector<Rows, T>();
 		for (int r = 0; r < Rows; ++r) {
 			auto sum = static_cast<T>(0);
 			for (int c = 0; c < Cols; ++c) {
-				sum += static_cast<T>(*this[r, c] * o[c]);
+				sum += static_cast<T>((*this)[r, c] * o[c]);
 			}
 			result[r] = sum;
 		}
@@ -196,6 +200,22 @@ public:
 			result[i, i] = static_cast<T>(1);
 		}
 		return result;
+	}
+
+	static Type ortho(T left, T right, T bottom, T top) requires (Cols == 4) && (Rows == 4) {
+		return ortho(left, right, bottom, top, static_cast<T>(1), static_cast<T>(0));
+	}
+
+	static Type ortho(T left, T right, T bottom, T top, T zNear, T zFar) requires (Cols == 4) && (Rows == 4) {
+		auto result = Type::identity();
+		result[0, 0] = static_cast<T>(2) / (right - left);
+		result[1, 1] = static_cast<T>(2) / (top - bottom);
+		result[2, 2] = static_cast<T>(1) / (zFar - zNear);
+		result[0, 3] = -(right + left) / (right - left);
+		result[1, 3] = -(top + bottom) / (top - bottom);
+		result[2, 3] = -zNear / (zFar - zNear);
+		return result;
+
 	}
 };
 

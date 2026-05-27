@@ -2,6 +2,7 @@
 #define SLUAGH_RENDERER_H
 #include "SDL3/SDL_gpu.h"
 #include "sluagh/export.h"
+#include "sluagh/utils/Matrix.h"
 #include "sluagh/utils/Vector.h"
 
 #include <vector>
@@ -23,6 +24,7 @@ private:
 	SDL_GPUTexture* texture;
 	SDL_GPUTexture* depth_buffer;
 	bool clear_depth = true;
+	Mat4f projection_matrix;
 
 public:
 	RenderTarget(RenderTargetType type, Vec2i size, bool clear_depth = true);
@@ -30,6 +32,7 @@ public:
 
 	RenderTargetType getType() const { return type; }
 	Vec2i getSize() const { return size; }
+	const Mat4f& getProjectionMatrix() const { return projection_matrix; }
 	SDL_GPUTexture* getTexture() const { return texture; }
 	SDL_GPUTexture* getDepthBuffer() const { return depth_buffer; }
 	bool isClearDepth() const { return clear_depth; }

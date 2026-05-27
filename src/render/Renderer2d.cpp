@@ -5,7 +5,7 @@
 #include "sluagh/utils/Logger.h"
 
 struct PositionColorVertex {
-	Vec3f pos;
+	Vec4f pos;
 	Vec4f color;
 };
 
@@ -91,17 +91,18 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 	auto* transfer_data = static_cast<PositionColorVertex*>(SDL_MapGPUTransferBuffer(gpu_device, transfer_buffer, true));
 	auto* index_data = reinterpret_cast<uint16_t*>(&transfer_data[count_vertices]);
 
+	const auto& proj = target->getProjectionMatrix();
+
 	uint32_t vertex_i = 0;
 	uint32_t index_i = 0;
 	uint16_t index_offset = 0;
 	for (uint32_t i = offset; i < offset + command_count; i++) {
 		const auto& command = commands[i];
 		for (uint32_t j = 0; j < command.position_count; j++, vertex_i++) {
-			transfer_data[vertex_i].pos = {
-				command.positions[j].x(),
-				command.positions[j].y(),
-				static_cast<float>(z_index)
-			};
+			transfer_data[vertex_i].pos = proj * Vec4f(
+				command.positions[j].x(), command.positions[j].y(),
+				z_index, 1.f
+			);
 			transfer_data[vertex_i].color = command.color.toVec4();
 		}
 
@@ -159,6 +160,7 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 	);
 
 	SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
+
 	SDL_GPUBufferBinding vertex_binding = {
 		.buffer = vertex_buffer,
 		.offset = 0
@@ -207,14 +209,14 @@ Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_fo
 		{
 			.location = 0,
 			.buffer_slot = 0,
-			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
 			.offset = 0
 		},
 		{
 			.location = 1,
 			.buffer_slot = 0,
 			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-			.offset = sizeof(float) * 3
+			.offset = sizeof(float) * 4
 		}
 	};
 
@@ -303,17 +305,22 @@ void Renderer2d::drawLine(Vec2f start, Vec2f end, float thickness) {
 	auto dir = (end - start).normalized();
 	auto normal = dir.cross();
 
-	command.positions[0] = start + normal * thickness / 2.f;
-	command.positions[1] = end + normal * thickness / 2.f;
-	command.positions[2] = end - normal * thickness / 2.f;
-	command.positions[3] = start - normal * thickness / 2.f;
+	auto tl = start - normal * thickness / 2.f;
+	auto tr = end - normal * thickness / 2.f;
+	auto br = end + normal * thickness / 2.f;
+	auto bl = start + normal * thickness / 2.f;
+
+	command.positions[0] = tl;
+	command.positions[1] = br;
+	command.positions[2] = tr;
+	command.positions[3] = bl;
 
 	command.indices[0] = 0;
 	command.indices[1] = 1;
-	command.indices[2] = 3;
-	command.indices[3] = 1;
-	command.indices[4] = 2;
-	command.indices[5] = 3;
+	command.indices[2] = 2;
+	command.indices[3] = 0;
+	command.indices[4] = 3;
+	command.indices[5] = 1;
 
 	render_pass_stack.back()->addCommand(std::move(command));
 }
@@ -322,16 +329,19 @@ void Renderer2d::fillRect(Vec2f pos, Vec2f size) {
 	auto command = RenderCommand2d(4, 6);
 	command.color = color;
 
-	command.positions[0] = pos;
-	command.positions[1] = pos + Vec2f{size.x(), 0.f};
-	command.positions[2] = pos + size;
-	command.positions[3] = pos + Vec2f{0.f, size.y()};
+	auto tl = pos;
+	auto br = pos + size;
+
+	command.positions[0] = Vec2f(tl.x(), tl.y());
+	command.positions[1] = Vec2f(br.x(), br.y());
+	command.positions[2] = Vec2f(br.x(), tl.y());
+	command.positions[3] = Vec2f(tl.x(), br.y());
 
 	command.indices[0] = 0;
 	command.indices[1] = 1;
-	command.indices[2] = 3;
-	command.indices[3] = 1;
-	command.indices[4] = 2;
-	command.indices[5] = 3;
+	command.indices[2] = 2;
+	command.indices[3] = 0;
+	command.indices[4] = 3;
+	command.indices[5] = 1;
 	render_pass_stack.back()->addCommand(std::move(command));
 }
