@@ -12,6 +12,12 @@
 #include <stack>
 #include <unordered_map>
 
+enum class BorderAlignment {
+	INSIDE = 0,
+	CENTER = 1,
+	OUTSIDE = 2
+};
+
 class Renderer2d;
 struct RenderCommand2d {
 	unsigned position_count;
@@ -79,8 +85,20 @@ public:
 
 	void setColor(Color color);
 
-	void drawLine(Vec2f start, Vec2f end, float thickness);
+	void drawLine(Vec2f start, Vec2f end, float thickness = 2.f);
+	void drawRect(Vec2f pos, Vec2f size, float thickness = 2.f,
+		BorderAlignment border_alignment = BorderAlignment::CENTER);
 	void fillRect(Vec2f pos, Vec2f size);
+
+	void drawCircle(Vec2f pos, float radius, float thickness = 2.f,
+		BorderAlignment border_alignment = BorderAlignment::CENTER);
+	void fillCircle(Vec2f pos, float radius);
+	void drawArc(Vec2f pos, float radius, float start_angle, float end_angle,
+		float thickness = 2.f, BorderAlignment border_alignment = BorderAlignment::CENTER);
+	void fillArc(Vec2f pos, float radius, float start_angle, float end_angle);
+
+	void fillTriangle(Vec2f a, Vec2f b, Vec2f c);
+	void drawBezier(Vec2f p1, Vec2f p2, Vec2f p3, Vec2f p4, float thickness = 2.f);
 };
 
 #endif // SLUAGH_RENDERER2D_H

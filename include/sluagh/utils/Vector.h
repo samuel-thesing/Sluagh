@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <string>
+#include <sstream>
 
 template <typename T, typename U>
 concept supportsArithmetics = requires(T t, U u) {
@@ -23,7 +25,7 @@ concept supportsArithmetics = requires(T t, U u) {
 		return result;													\
 	}																	\
 	template <typename U> requires supportsArithmetics<T, U>			\
-	friend Type operator op(U const scalar, const Vector<Rows, U>& v) {	\
+	friend Type operator op(U const scalar, const Vector<Rows, T>& v) {	\
 		auto result = Type();											\
 		for (int i = 0; i < Rows; ++i) {								\
 			result.data[i] = static_cast<T>(scalar op v.data[i]);		\
@@ -174,6 +176,17 @@ public:
 			result.data[i] = static_cast<T>(data[i] / len);
 		}
 		return result;
+	}
+
+	std::string toString() const {
+		std::stringstream ss;
+		ss << '{';
+		for (int i = 0; i < Rows; ++i) {
+			if (i != 0) ss << ',';
+			ss << data[i];
+		}
+		ss << '}';
+		return ss.str();
 	}
 };
 

@@ -95,7 +95,7 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 
 	uint32_t vertex_i = 0;
 	uint32_t index_i = 0;
-	uint16_t index_offset = 0;
+	uint16_t vertex_offset = 0;
 	for (uint32_t i = offset; i < offset + command_count; i++) {
 		const auto& command = commands[i];
 		for (uint32_t j = 0; j < command.position_count; j++, vertex_i++) {
@@ -107,9 +107,9 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 		}
 
 		for (uint32_t j = 0; j < command.index_count; j++, index_i++) {
-			index_data[index_i] = index_offset + command.indices[j];
+			index_data[index_i] = vertex_offset + command.indices[j];
 		}
-		index_offset += command.index_count;
+		vertex_offset += command.position_count;
 	}
 
 	SDL_UnmapGPUTransferBuffer(gpu_device, transfer_buffer);
@@ -324,6 +324,58 @@ void Renderer2d::drawLine(Vec2f start, Vec2f end, float thickness) {
 
 	render_pass_stack.back()->addCommand(std::move(command));
 }
+void Renderer2d::drawRect(Vec2f pos, Vec2f size, float thickness,
+		BorderAlignment border_alignment) {
+	auto command = RenderCommand2d(8, 24);
+
+	auto inner_tl = pos;
+	auto inner_br = pos + size;
+	if (border_alignment == BorderAlignment::INSIDE) {
+		inner_tl += thickness;
+		inner_br -= thickness;
+	} else if (border_alignment == BorderAlignment::CENTER) {
+		inner_tl += thickness / 2.f;
+		inner_br -= thickness / 2.f;
+	}
+	auto outer_tl = inner_tl - thickness;
+	auto outer_br = inner_br + thickness;
+
+	command.positions[0] = outer_tl;
+	command.positions[1] = inner_tl;
+	command.positions[2] = Vec2f{outer_br.x(), outer_tl.y()};
+	command.positions[3] = Vec2f{inner_br.x(), inner_tl.y()};
+	command.positions[4] = outer_br;
+	command.positions[5] = inner_br;
+	command.positions[6] = Vec2f{outer_tl.x(), outer_br.y()};
+	command.positions[7] = Vec2f{inner_tl.x(), inner_br.y()};
+
+	command.indices[0] = 0;
+	command.indices[1] = 1;
+	command.indices[2] = 2;
+	command.indices[3] = 1;
+	command.indices[4] = 3;
+	command.indices[5] = 2;
+	command.indices[6] = 2;
+	command.indices[7] = 3;
+	command.indices[8] = 4;
+	command.indices[9] = 3;
+	command.indices[10] = 5;
+	command.indices[11] = 4;
+	command.indices[12] = 4;
+	command.indices[13] = 5;
+	command.indices[14] = 6;
+	command.indices[15] = 5;
+	command.indices[16] = 7;
+	command.indices[17] = 6;
+	command.indices[18] = 6;
+	command.indices[19] = 7;
+	command.indices[20] = 0;
+	command.indices[21] = 7;
+	command.indices[22] = 1;
+	command.indices[23] = 0;
+
+	render_pass_stack.back()->addCommand(std::move(command));
+}
 
 void Renderer2d::fillRect(Vec2f pos, Vec2f size) {
 	auto command = RenderCommand2d(4, 6);
@@ -345,3 +397,272 @@ void Renderer2d::fillRect(Vec2f pos, Vec2f size) {
 	command.indices[5] = 1;
 	render_pass_stack.back()->addCommand(std::move(command));
 }
+
+static uint16_t circle_segment_count(float radius) {
+	auto d = std::acos(1.f - 0.3f / radius);
+	return static_cast<uint16_t>(std::ceil(std::numbers::pi / d));
+}
+
+void Renderer2d::drawCircle(Vec2f pos, float radius, float thickness, BorderAlignment border_alignment) {
+	auto segment_count = circle_segment_count(radius);
+
+	if (border_alignment == BorderAlignment::INSIDE) {
+		radius -= thickness;
+	} else if (border_alignment == BorderAlignment::CENTER) {
+		radius -= thickness / 2.f;
+	}
+	if (radius < 0.f) radius = 0.f;
+
+	auto command = RenderCommand2d(2 * segment_count, 6 * segment_count);
+	command.color = color;
+
+	constexpr auto two_pi = std::numbers::pi * 2.f;
+	for (uint16_t i = 0; i <= segment_count; i++) {
+		auto angle = i * two_pi / segment_count;
+		auto angle_vec = Vec2f{std::cos(angle), std::sin(angle)};
+		command.positions[2 * i + 0] = pos + radius * angle_vec;
+		command.positions[2 * i + 0] = pos + (radius + thickness) * angle_vec;
+
+		command.indices[6 * i + 0] = 2 * i;
+		command.indices[6 * i + 1] = 2 * i + 1;
+		command.indices[6 * i + 2] = 2 * ((i + 1) % segment_count);
+		command.indices[6 * i + 3] = 2 * i + 1;
+		command.indices[6 * i + 4] = 2 * ((i + 1) % segment_count);
+		command.indices[6 * i + 5] = 2 * ((i + 1) % segment_count) + 1;
+	}
+
+	render_pass_stack.back()->addCommand(std::move(command));
+}
+
+void Renderer2d::fillCircle(Vec2f pos, float radius) {
+	auto segment_count = circle_segment_count(radius);
+
+	auto command = RenderCommand2d(segment_count + 1, 3 * segment_count);
+	command.color = color;
+
+	constexpr auto two_pi = std::numbers::pi * 2.f;
+	command.positions[0] = pos;
+	for (uint16_t i = 0; i <= segment_count; i++) {
+		auto angle = i * two_pi / segment_count;
+		command.positions[1 + i] = pos + radius * Vec2f{std::cos(angle), std::sin(angle)};
+
+		command.indices[3 * i] = 0;
+		command.indices[3 * i + 1] = 1 + i;
+		command.indices[3 * i + 2] = 1 + (i + 1) % segment_count;
+	}
+
+	render_pass_stack.back()->addCommand(std::move(command));
+}
+
+void Renderer2d::drawArc(Vec2f pos, float radius, float start_angle,
+	float end_angle, float thickness, BorderAlignment border_alignment) {
+	constexpr auto two_pi = std::numbers::pi * 2.f;
+	auto angle_diff = end_angle - start_angle;
+
+	if (start_angle >= end_angle) {
+		Logger::warn("fillArc was called with a start_angle equal or greater than the end_angle.");
+		return;
+	}
+	if (start_angle <= -two_pi || start_angle >= two_pi) {
+		Logger::warn("fillArc expects a start_angle in the inclusive range of [-2*PI, 2*PI].");
+		return;
+	}
+	if (angle_diff > two_pi) {
+		Logger::warn("fillArc expects an angle_diff of less than 2*PI.");
+		return;
+	}
+
+	auto segment_count = static_cast<uint16_t>(
+		std::ceil(circle_segment_count(radius) / (angle_diff / two_pi))
+	);
+
+	if (border_alignment == BorderAlignment::INSIDE) {
+		radius -= thickness;
+	} else if (border_alignment == BorderAlignment::CENTER) {
+		radius -= thickness / 2.f;
+	}
+	if (radius < 0.f) radius = 0.f;
+
+	auto command = RenderCommand2d(2 * segment_count, 6 * segment_count);
+	command.color = color;
+
+	for (uint16_t i = 0; i <= segment_count; i++) {
+		auto angle = start_angle + i * angle_diff / segment_count;
+		auto angle_vec = Vec2f{std::cos(angle), std::sin(angle)};
+		command.positions[2 * i + 0] = pos + radius * angle_vec;
+		command.positions[2 * i + 0] = pos + (radius + thickness) * angle_vec;
+	}
+
+	for (uint16_t i = 0; i < segment_count; i++) {
+		command.indices[6 * i + 0] = 2 * i;
+		command.indices[6 * i + 1] = 2 * i + 1;
+		command.indices[6 * i + 2] = 2 * (i + 1);
+		command.indices[6 * i + 3] = 2 * i + 1;
+		command.indices[6 * i + 4] = 2 * (i + 1);
+		command.indices[6 * i + 5] = 2 * (i + 1) + 1;
+	}
+
+	render_pass_stack.back()->addCommand(std::move(command));
+}
+
+void Renderer2d::fillArc(Vec2f pos, float radius, float start_angle, float end_angle) {
+	constexpr auto two_pi = std::numbers::pi * 2.f;
+	auto angle_diff = end_angle - start_angle;
+
+	if (start_angle >= end_angle) {
+		Logger::warn("fillArc was called with a start_angle equal or greater than the end_angle.");
+		return;
+	}
+	if (start_angle <= -two_pi || start_angle >= two_pi) {
+		Logger::warn("fillArc expects a start_angle in the inclusive range of [-2*PI, 2*PI].");
+		return;
+	}
+	if (angle_diff > two_pi) {
+		Logger::warn("fillArc expects an angle_diff of less than 2*PI.");
+		return;
+	}
+
+	auto segment_count = static_cast<uint16_t>(
+		std::ceil(circle_segment_count(radius) / (angle_diff / two_pi))
+	);
+
+	auto command = RenderCommand2d(segment_count + 1, 3 * segment_count);
+	command.color = color;
+
+	command.positions[0] = pos;
+	for (uint16_t i = 0; i <= segment_count + 1; i++) {
+		auto angle = start_angle + i * angle_diff / segment_count;
+		command.positions[1 + i] = pos + radius * Vec2f{std::cos(angle), std::sin(-angle)};
+	}
+
+	for (uint16_t i = 0; i < segment_count; i++) {
+		command.indices[3 * i] = 0;
+		command.indices[3 * i + 1] = 1 + i;
+		command.indices[3 * i + 2] = 1 + i + 1;
+	}
+
+	render_pass_stack.back()->addCommand(std::move(command));
+}
+
+void Renderer2d::fillTriangle(Vec2f a, Vec2f b, Vec2f c) {
+	auto command = RenderCommand2d(3, 3);
+	command.color = color;
+
+	auto m = Mat3f{
+		a.x(), a.y(), 1.f,
+		b.x(), b.y(), 1.f,
+		c.x(), c.y(), 1.f
+	};
+	if (m.det() > 0) {
+		auto tmp = b;
+		b = c;
+		c = tmp;
+	}
+
+	command.positions[0] = a;
+	command.positions[1] = b;
+	command.positions[2] = c;
+
+	command.indices[0] = 0;
+	command.indices[1] = 1;
+	command.indices[2] = 2;
+	render_pass_stack.back()->addCommand(std::move(command));
+}
+
+static void recursive_bezier(std::vector<Vec2f>& points, Vec2f p1, Vec2f p2, Vec2f p3, Vec2f p4, uint8_t level = 0) {
+	if (level > 16) return;
+
+	constexpr auto distance_tolerance = 0.25f;
+	constexpr auto angle_tolerance = 0.05f;
+
+	auto p12 = (p1 + p2) / 2.f;
+	auto p23 = (p2 + p3) / 2.f;
+	auto p34 = (p3 + p4) / 2.f;
+	auto p123 = (p12 + p23) / 2.f;
+	auto p234 = (p23 + p34) / 2.f;
+	auto p1234 = (p123 + p234) / 2.f;
+
+	Vec2f d = p4 - p1;
+	float d2 = std::fabs((p2.x() - p4.x()) * d.y() - (p2.y() - p4.y()) * d.x());
+	float d3 = std::fabs((p3.x() - p4.x()) * d.y() - (p3.y() - p4.y()) * d.x());
+
+	if ((d2 + d3) * (d2 + d3) < distance_tolerance * (d.x() * d.x() + d.y() * d.y())) {
+		auto a23 = atan2(p3.y() - p2.y(), p3.x() - p2.x());
+		auto da1 = std::fabs(a23 - atan2(p2.y() - p1.y(), p2.x() - p1.x()));
+		auto da2 = std::fabs(atan2(p4.y() - p3.y(), p4.x() - p3.x()) - a23);
+		if (da1 >= std::numbers::pi) da1 = 2 * std::numbers::pi - da1;
+		if (da2 >= std::numbers::pi) da2 = 2 * std::numbers::pi - da2;
+
+		if (da1 + da2 < angle_tolerance) {
+			points.push_back(p23);
+			return;
+		}
+	}
+
+	recursive_bezier(points, p1, p12, p123, p1234, level + 1);
+	recursive_bezier(points, p1234, p234, p34, p4, level + 1);
+}
+
+void Renderer2d::drawBezier(Vec2f p1, Vec2f p2, Vec2f p3, Vec2f p4, float thickness) {
+	auto points = std::vector<Vec2f>();
+	points.push_back(p1);
+	recursive_bezier(points, p1, p2, p3, p4);
+	points.push_back(p4);
+
+	std::vector<Vec2f> tangents;
+	std::vector<Vec2f> normals;
+	tangents.reserve(points.size());
+	normals.reserve(points.size());
+	for (uint16_t i = 0; i < points.size() - 1; i++) {
+		auto tangent = (points[i+1] - points[i]).normalized();
+		tangents.push_back(tangent);
+		normals.push_back(tangent.cross());
+	}
+	auto end_tangent = (p4 - p3).normalized();
+	tangents.push_back(end_tangent);
+	normals.push_back(end_tangent.cross());
+
+	auto command = RenderCommand2d(
+		static_cast<uint32_t>(2 * points.size()),
+		static_cast<uint16_t>((points.size() - 1) * 6)
+	);
+	command.color = color;
+
+	for (uint16_t i = 0; i < points.size(); i++) {
+		command.positions[2 * i + 0] = points[i] - normals[i] * thickness / 2.f;
+		command.positions[2 * i + 1] = points[i] + normals[i] * thickness / 2.f;
+	}
+
+	for (uint16_t i = 0; i < points.size()-1; ++i) {
+		auto t1 = tangents[i];
+		auto t2 = tangents[i+1];
+		auto n1 = normals[i];
+		auto n2 = normals[i+1];
+
+		auto cos_theta = std::clamp(t1.dot(t2), -1.f, 1.f);
+		auto theta = std::acos(cos_theta);
+		if (std::abs(theta) < 1e-3f) continue;
+
+		Vec2f miter_dir = (n1 + n2).normalized();
+		float denom = miter_dir.dot(n2);
+		if (std::abs(denom) < 1e-6f) continue;
+
+		float miter_len = thickness / 2.f / denom;
+		command.positions[2 * i] = points[i] - miter_dir * miter_len;
+		command.positions[2 * i + 1] = points[i] + miter_dir * miter_len;
+
+		uint16_t tl_idx = 2 * i;
+		uint16_t tr_idx = 2 * (i + 1);
+		uint16_t bl_idx = 2 * i + 1;
+		uint16_t br_idx = 2 * (i + 1) + 1;
+		command.indices[6 * i + 0] = tl_idx;
+		command.indices[6 * i + 1] = br_idx;
+		command.indices[6 * i + 2] = tr_idx;
+		command.indices[6 * i + 3] = tl_idx;
+		command.indices[6 * i + 4] = bl_idx;
+		command.indices[6 * i + 5] = br_idx;
+	}
+
+	render_pass_stack.back()->addCommand(std::move(command));
+}
+

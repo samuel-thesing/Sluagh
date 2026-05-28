@@ -108,6 +108,10 @@ void Application::onRender() {
 	renderer2d->beginPass();
 	renderer2d->setColor(Colors::AQUAMARINE);
 	renderer2d->fillRect({50.f, 100.f}, {100.f, 50.f});
+	renderer2d->setColor(Colors::GREEN);
+	renderer2d->drawRect({50.f, 100.f}, {50.f, 50.f}, 5.f, BorderAlignment::INSIDE);
+
+	renderer2d->drawBezier({0.f, 0.f}, {100.f, 0.f}, {0.f, 100.f}, {100.f, 100.f}, 20.f);
 	renderer2d->endPass();
 
 	renderer2d->renderAll();
