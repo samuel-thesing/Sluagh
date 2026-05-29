@@ -19,10 +19,14 @@ Window::Window(const std::string& title, Vec2i size)
 		throw std::runtime_error("Failed to claim window for GPU device");
 	}
 
-	render_target = new RenderTarget(RenderTargetType::Window, size);
+	render_target = new RenderTarget(
+		RenderTargetType::Window, size,
+		SDL_GetGPUSwapchainTextureFormat(Application::getGPUDevice(), sdl_window)
+	);
 }
 
 Window::~Window() {
+	delete render_target;
 	SDL_ReleaseWindowFromGPUDevice(Application::getGPUDevice(), sdl_window);
 	SDL_DestroyWindow(sdl_window);
 }
@@ -36,6 +40,10 @@ void Window::resize(Vec2i new_size) {
 	size = new_size;
 	SDL_SetWindowSize(sdl_window, new_size.x(), new_size.y());
 }
+SDL_GPUTextureFormat Window::getTextureFormat() const {
+	return SDL_GetGPUSwapchainTextureFormat(Application::getGPUDevice(), sdl_window);
+}
+
 void Window::startRenderFrame(SDL_GPUCommandBuffer* command_buffer) {
 	SDL_GPUTexture* swapchain_texture;
 	if (!SDL_WaitAndAcquireGPUSwapchainTexture(
@@ -44,7 +52,7 @@ void Window::startRenderFrame(SDL_GPUCommandBuffer* command_buffer) {
 			&swapchain_texture,
 			nullptr, nullptr
 		)) {
-		Logger::critical("Failed to acquire swapchain texture for GPU command buffer '{}'", title);
+		Logger::critical("Failed to acquire swapchain texture for Window '{}'. Error: {}", title, SDL_GetError());
 		throw std::runtime_error("Failed to acquire swapchain texture for GPU command buffer");
 	}
 	render_target->setTexture(swapchain_texture);
@@ -56,12 +64,19 @@ void Window::startRenderFrame(SDL_GPUCommandBuffer* command_buffer) {
 		.load_op = SDL_GPU_LOADOP_CLEAR,
 		.store_op = SDL_GPU_STOREOP_STORE
 	};
+	const auto& config = Application::getConfig().graphic_config;
+	if (config.enable_multisampling) {
+		color_target.texture = render_target->getMultisampleTexture();
+		color_target.resolve_texture = swapchain_texture;
+		color_target.store_op = SDL_GPU_STOREOP_RESOLVE;
+	}
+
 
 	SDL_GPUDepthStencilTargetInfo depth_target = {
 		.texture = render_target->getDepthBuffer(),
 		.clear_depth = 1.0f,
 		.load_op = SDL_GPU_LOADOP_CLEAR,
-		.store_op = SDL_GPU_STOREOP_STORE
+		.store_op = SDL_GPU_STOREOP_STORE,
 	};
 
 	SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(

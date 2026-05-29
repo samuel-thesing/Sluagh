@@ -30,6 +30,7 @@ public:
 	RenderTarget* getRenderTarget() const { return render_target; }
 	SDL_WindowID getWindowId() const { return window_id; }
 	SDL_Window* getSDLWindow() const { return sdl_window; }
+	SDL_GPUTextureFormat getTextureFormat() const;
 
 	void startRenderFrame(SDL_GPUCommandBuffer* command_buffer);
 };

@@ -2,6 +2,7 @@
 #define SLUAGH_RENDERER2D_H
 #include "Renderer.h"
 #include "SDL3/SDL_gpu.h"
+#include "sluagh/core/Application.h"
 
 #include <vector>
 
@@ -53,8 +54,6 @@ public:
 
 class SLUAGH_EXPORT Renderer2d : public Renderer {
 private:
-	SDL_GPUDevice* gpu_device;
-
 	SDL_GPUGraphicsPipeline* pipeline;
 	SDL_GPUBuffer* vertex_buffer;
 	SDL_GPUBuffer* index_buffer;
@@ -76,7 +75,7 @@ private:
 		uint32_t command_count, uint32_t count_vertices, uint32_t count_indices);
 
 public:
-	Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_format);
+	Renderer2d();
 	~Renderer2d() override;
 
 	void beginPass(int z = 0);

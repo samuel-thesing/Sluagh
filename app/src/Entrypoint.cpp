@@ -16,7 +16,14 @@ Application *createApplication(Arguments args) {
 	}
 #endif
 
-	auto app = Application::create();
+	Application::Config config = {
+		.graphic_config = {
+			.enable_multisampling = true,
+			.multisample_count = SDL_GPU_SAMPLECOUNT_2
+		}
+	};
+
+	auto app = Application::create(config);
 	app->addWindow(new Window("Sluagh", {800, 600}));
 	//app->addWindow(new Window("Sluagh 2", {800, 600}));
 

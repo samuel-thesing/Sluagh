@@ -1,22 +1,19 @@
 #include "sluagh/core/Application.h"
 
 #include "sluagh/render/utils.h"
+#include "sluagh/utils/Color.h"
 #include "sluagh/utils/Logger.h"
+
+#include "sluagh/render/Renderer2d.h"
 
 Application *Application::instance = nullptr;
 
-Application *Application::create() {
-	new Application();
+Application *Application::create(const Config& config) {
+	new Application(config);
 	return instance;
 }
 void Application::start() {
-	instance->renderer2d = new Renderer2d(
-		instance->gpu_device,
-		SDL_GetGPUSwapchainTextureFormat(
-			instance->gpu_device,
-			getMainWindow()->getSDLWindow()
-		)
-	);
+	instance->renderer2d = new Renderer2d();
 }
 
 void Application::destroy() {
@@ -24,8 +21,10 @@ void Application::destroy() {
 	instance = nullptr;
 }
 
-Application::Application() {
+Application::Application(const Config& config) : config(config) {
 	instance = this;
+
+	SDL_SetHint(SDL_HINT_RENDER_VULKAN_DEBUG, "1");
 
 	gpu_device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
 	if (gpu_device == nullptr) {
@@ -39,6 +38,8 @@ Application::Application() {
 }
 
 Application::~Application() {
+	delete renderer2d;
+
 	SDL_DestroyGPUDevice(gpu_device);
 }
 
@@ -100,18 +101,23 @@ void Application::onRender() {
 
 	renderer2d->setCommandBuffer(cmd_buf);
 
-	renderer2d->beginPass(1);
+	renderer2d->beginPass();
 	renderer2d->setColor(Colors::RED);
-	renderer2d->drawLine({0.f, 0.f}, {200.f, 200.f}, 5.f);
+	renderer2d->fillRect({0.f, 0.f}, {200.f, 200.f});
 	renderer2d->endPass();
 
 	renderer2d->beginPass();
 	renderer2d->setColor(Colors::AQUAMARINE);
-	renderer2d->fillRect({50.f, 100.f}, {100.f, 50.f});
-	renderer2d->setColor(Colors::GREEN);
-	renderer2d->drawRect({50.f, 100.f}, {50.f, 50.f}, 5.f, BorderAlignment::INSIDE);
+	renderer2d->fillRect({300.f, 300.f}, {100.f, 50.f});
+	// renderer2d->setColor(Colors::GREEN);
+	// renderer2d->drawRect({50.f, 100.f}, {50.f, 50.f}, 5.f, BorderAlignment::INSIDE);
 
-	renderer2d->drawBezier({0.f, 0.f}, {100.f, 0.f}, {0.f, 100.f}, {100.f, 100.f}, 20.f);
+	// renderer2d->drawBezier({0.f, 0.f}, {100.f, 0.f}, {0.f, 100.f}, {100.f, 100.f}, 20.f);
+	renderer2d->endPass();
+
+	renderer2d->beginPass();
+	renderer2d->setColor(Colors::GREEN);
+	renderer2d->fillRect({0.f, 200.f}, {200.f, 200.f});
 	renderer2d->endPass();
 
 	renderer2d->renderAll();

@@ -88,7 +88,9 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 		const std::vector<RenderCommand2d>& commands,
 		uint32_t offset, uint32_t command_count,
 		uint32_t count_vertices, uint32_t count_indices) {
-	auto* transfer_data = static_cast<PositionColorVertex*>(SDL_MapGPUTransferBuffer(gpu_device, transfer_buffer, true));
+	auto* transfer_data = static_cast<PositionColorVertex*>(
+		SDL_MapGPUTransferBuffer(Application::getGPUDevice(), transfer_buffer, true)
+	);
 	auto* index_data = reinterpret_cast<uint16_t*>(&transfer_data[count_vertices]);
 
 	const auto& proj = target->getProjectionMatrix();
@@ -112,7 +114,7 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 		vertex_offset += command.position_count;
 	}
 
-	SDL_UnmapGPUTransferBuffer(gpu_device, transfer_buffer);
+	SDL_UnmapGPUTransferBuffer(Application::getGPUDevice(), transfer_buffer);
 
 	SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
 
@@ -149,6 +151,13 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 		.store_op = SDL_GPU_STOREOP_STORE,
 	};
 
+	if (target->isMultisample()) {
+		color_target.store_op = SDL_GPU_STOREOP_RESOLVE;
+		color_target.texture = target->getMultisampleTexture();
+		color_target.resolve_texture = target->getTexture();
+		color_target.mip_level = 0;
+	}
+
 	SDL_GPUDepthStencilTargetInfo depth_target = {
 		.texture = target->getDepthBuffer(),
 		.load_op = SDL_GPU_LOADOP_LOAD,
@@ -176,8 +185,9 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 	SDL_EndGPURenderPass(render_pass);
 }
 
-Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_format)
-	: gpu_device(gpu_device) {
+Renderer2d::Renderer2d() {
+	auto* gpu_device = Application::getGPUDevice();
+
 	SDL_GPUShader *vertex_shader = loadShader(gpu_device,
 		"./rsc/shader/basic.vert", 0, 0,
 		0, 0);
@@ -186,7 +196,7 @@ Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_fo
 		0, 0);
 
 	SDL_GPUColorTargetDescription color_target = {
-		.format = target_format,
+		.format = Application::getSwapchainTextureFormat(),
 		.blend_state = {
 			.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
 			.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
@@ -243,6 +253,16 @@ Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_fo
 		}
 	};
 
+	const auto& config = Application::getConfig().graphic_config;
+	if (config.enable_multisampling) {
+		pipeline_info.multisample_state = {
+			.sample_count = config.multisample_count,
+			.sample_mask = 0,
+			.enable_mask = false,
+			.enable_alpha_to_coverage = false
+		};
+	}
+
 	pipeline = SDL_CreateGPUGraphicsPipeline(gpu_device, &pipeline_info);
 	if (pipeline == nullptr) {
 		Logger::critical("Failed to create GPU pipeline");
@@ -274,6 +294,8 @@ Renderer2d::Renderer2d(SDL_GPUDevice* gpu_device, SDL_GPUTextureFormat target_fo
 }
 
 Renderer2d::~Renderer2d() {
+	auto* gpu_device = Application::getGPUDevice();
+
 	SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
 	SDL_ReleaseGPUBuffer(gpu_device, vertex_buffer);
 	SDL_ReleaseGPUBuffer(gpu_device, index_buffer);

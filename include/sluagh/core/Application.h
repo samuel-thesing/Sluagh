@@ -6,16 +6,24 @@
 #include <SDL3/SDL.h>
 
 #include "sluagh/export.h"
-#include "sluagh/render/Renderer2d.h"
 #include "sluagh/utils/Arguments.h"
+
+class Renderer2d;
 
 class SLUAGH_EXPORT Application {
 public:
+	struct GraphicConfig {
+		bool enable_multisampling;
+		SDL_GPUSampleCount multisample_count;
+	};
+
 	struct Config {
-		std::string title;
+		GraphicConfig graphic_config;
 	};
 
 private:
+	Config config;
+
 	std::vector<Window*> windows;
 	uint32_t main_window;
 
@@ -27,11 +35,11 @@ private:
 private:
 	static Application *instance;
 
-	Application();
+	Application(const Config& config);
 	~Application();
 
 public:
-	static Application *create();
+	static Application *create(const Config& config);
 	void start();
 	static void destroy();
 
@@ -39,6 +47,8 @@ public:
 		return instance->gpu_device;
 	};
 	static Window* getMainWindow() { return instance->windows[instance->main_window]; }
+	static const Config& getConfig() { return instance->config; }
+	static SDL_GPUTextureFormat getSwapchainTextureFormat() { return getMainWindow()->getTextureFormat(); }
 
 	void addWindow(Window* window);
 
