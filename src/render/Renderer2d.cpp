@@ -10,24 +10,40 @@ struct PositionColorVertex {
 };
 
 RenderCommand2d::RenderCommand2d(uint32_t position_count, uint16_t index_count)
-	: position_count(position_count), index_count(index_count), color(Colors::MAGENTA) {
+	: position_count(position_count), index_count(index_count), color(Colors::MAGENTA),
+		texture_id(0) {
 	positions = new Vec2f[position_count];
 	indices = new uint16_t[index_count];
+	texture_coords = nullptr;
 }
+
+RenderCommand2d::RenderCommand2d(uint32_t position_count, uint16_t index_count, uint16_t texture_id)
+	: position_count(position_count), index_count(index_count), color(Colors::MAGENTA), texture_id(texture_id) {
+	positions = new Vec2f[position_count];
+	indices = new uint16_t[index_count];
+	texture_coords = new Vec2f[position_count];
+}
+
 RenderCommand2d::RenderCommand2d(RenderCommand2d &&o) noexcept {
 	positions = o.positions;
 	indices = o.indices;
+	texture_coords = o.texture_coords;
 	o.positions = nullptr;
 	o.indices = nullptr;
+	o.texture_coords = nullptr;
 
 	color = o.color;
 	position_count = o.position_count;
 	index_count = o.index_count;
+	texture_id = o.texture_id;
 }
 
 RenderCommand2d::~RenderCommand2d() {
 	delete[] positions;
 	delete[] indices;
+	if (texture_coords != nullptr) {
+		delete[] texture_coords;
+	}
 }
 
 RenderPass2d::RenderPass2d(RenderTarget* target, Renderer2d *renderer, int z)
@@ -48,7 +64,9 @@ void Renderer2d::renderPass(RenderPass2d *pass) {
 	const auto& commands = pass->getRenderCommands();
 	uint32_t count_vertices = 0;
 	uint32_t count_indices = 0;
+	uint32_t count_textures = 0;
 	uint32_t last_flush_index = 0;
+	SDL_GPUTexture
 	for (uint32_t i = 0; i < commands.size(); i++) {
 		if (count_vertices + commands[i].position_count >= MAX_VERTICES_PER_BATCH
 			|| count_indices + commands[i].index_count >= MAX_INDICES_PER_BATCH) {

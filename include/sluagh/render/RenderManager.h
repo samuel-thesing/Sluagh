@@ -48,7 +48,11 @@ public:
 };
 
 class RenderPass {
+private:
+	static uint32_t next_id;
+
 protected:
+	uint32_t id;
 	RenderTarget* target;
 
 public:
@@ -64,10 +68,12 @@ class RenderManager {
 private:
 	std::vector<RenderPass*> render_passes; // ordered by z then by when they ended
 
-	// integrate efects as passes. how to "sort" them?
+	// integrate effects as passes. how to "sort" them?
 
 	// types of effects:
-	// apply after/before specific z
+	// apply to current state vs after/before specific z
+	// forbid apply to current state and instead force to use separate pass
+	// => bind to z-layers or specific passes -> how to id passes?
 
 	// examples:
 	// z-0 blur z-1 => sort by z

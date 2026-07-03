@@ -26,9 +26,11 @@ struct RenderCommand2d {
 	Vec2f* positions;
 	uint16_t* indices;
 	Color color;
-	// texture
+	uint16_t texture_id;
+	Vec2f* texture_coords;
 
 	RenderCommand2d(uint32_t position_count, uint16_t index_count);
+	RenderCommand2d(uint32_t position_count, uint16_t index_count, uint16_t texture_id);
 	RenderCommand2d(RenderCommand2d&& o) noexcept;
 	~RenderCommand2d();
 };
@@ -65,6 +67,7 @@ private:
 
 	const uint16_t MAX_VERTICES_PER_BATCH = 20000;
 	const uint16_t MAX_INDICES_PER_BATCH = 30000;
+	const uint8_t MAX_TEXTURE_PER_BATCH = 16;
 
 private:
 	friend class RenderPass2d;
