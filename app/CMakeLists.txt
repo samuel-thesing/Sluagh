@@ -15,7 +15,9 @@ target_link_libraries(${APP_TARGET_NAME} PUBLIC
     sluagh::sluagh
     project_warnings
     project_optimizations
+
     SDL3::SDL3
+    SDL3_image::SDL3_image
     spdlog::spdlog
 )
 
