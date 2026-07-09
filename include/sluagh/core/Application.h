@@ -6,6 +6,8 @@
 #include <SDL3/SDL.h>
 
 #include "sluagh/export.h"
+#include "sluagh/render/RenderManager.h"
+#include "sluagh/render/TextureManager.h"
 #include "sluagh/utils/Arguments.h"
 
 class Renderer2d;
@@ -28,7 +30,8 @@ private:
 	uint32_t main_window;
 
 	SDL_GPUDevice *gpu_device;
-	Renderer2d* renderer2d;
+	RenderManager* render_manager;
+	TextureManager* texture_manager;
 
 	bool quit = false;
 
@@ -43,12 +46,13 @@ public:
 	void start();
 	static void destroy();
 
-	static SDL_GPUDevice* getGPUDevice() {
-		return instance->gpu_device;
-	};
+	static SDL_GPUDevice* getGPUDevice() { return instance->gpu_device; }
+	static TextureManager* getTextureManager() { return instance->texture_manager; }
 	static Window* getMainWindow() { return instance->windows[instance->main_window]; }
 	static const Config& getConfig() { return instance->config; }
 	static SDL_GPUTextureFormat getSwapchainTextureFormat() { return getMainWindow()->getTextureFormat(); }
+
+	RenderManager* getRenderManager() { return instance->render_manager; }
 
 	void addWindow(Window* window);
 

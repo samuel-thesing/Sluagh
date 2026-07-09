@@ -11,11 +11,15 @@ protected:
 	SDL_GPUTextureFormat format;
 	SDL_GPUTexture* texture;
 
+private:
+	void uploadTexture(void* data);
+
 public:
 	Texture();
 	virtual ~Texture();
 
-	bool loadFromFile(const std::string& path);
+	void loadFromFile(const std::string& path);
+	void createFromData(void* data, Vec2u texture_size);
 
 	Vec2u getSize() const { return size; }
 	SDL_GPUTextureFormat getFormat() const { return format; }

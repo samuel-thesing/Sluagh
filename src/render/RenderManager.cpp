@@ -1,6 +1,7 @@
 #include "sluagh/render/RenderManager.h"
 
 #include "sluagh/core/Application.h"
+#include "sluagh/render/Renderer.h"
 #include "sluagh/utils/Logger.h"
 
 uint32_t RenderTarget::next_id = 1;
@@ -70,3 +71,24 @@ void RenderTarget::setTexture(SDL_GPUTexture* new_texture) {
 }
 
 RenderPass::RenderPass(RenderTarget *target) : target{target} {}
+
+RenderManager::~RenderManager() {
+	for (auto& [_, renderer] : renderers) {
+		delete renderer;
+	}
+}
+
+void RenderManager::addRenderPass(RenderPass *render_pass) {
+	render_passes.push_back(render_pass);
+}
+
+void RenderManager::flushPasses() {
+	for (auto* pass : render_passes) {
+		pass->render();
+	}
+
+	for (auto *pass : render_passes) {
+		delete pass;
+	}
+	render_passes.clear();
+}

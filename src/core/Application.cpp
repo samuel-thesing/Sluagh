@@ -13,7 +13,7 @@ Application *Application::create(const Config& config) {
 	return instance;
 }
 void Application::start() {
-	instance->renderer2d = new Renderer2d();
+	texture_manager->loadFromFile("./rsc/textures/dog.png");
 }
 
 void Application::destroy() {
@@ -34,11 +34,15 @@ Application::Application(const Config& config) : config(config) {
 
 	main_window = 0;
 
+	render_manager = new RenderManager();
+	texture_manager = new TextureManager();
+
 	Logger::trace("Finished initializing application");
 }
 
 Application::~Application() {
-	delete renderer2d;
+	delete render_manager;
+	delete texture_manager;
 
 	SDL_DestroyGPUDevice(gpu_device);
 }
@@ -98,6 +102,7 @@ void Application::onRender() {
 	if (windows.empty()) {
 		return;
 	}
+	auto* renderer2d = render_manager->getRenderer<Renderer2d>();
 
 	renderer2d->setCommandBuffer(cmd_buf);
 
@@ -117,10 +122,10 @@ void Application::onRender() {
 
 	renderer2d->beginPass();
 	renderer2d->setColor(Colors::GREEN);
-	renderer2d->fillRect({0.f, 200.f}, {200.f, 200.f});
+	renderer2d->drawTexture(texture_manager->getTexture(1)->getTexture(), {0.f, 200.f}, {200.f, 200.f});
 	renderer2d->endPass();
 
-	renderer2d->renderAll();
+	render_manager->flushPasses();
 
 	SDL_SubmitGPUCommandBuffer(cmd_buf);
 }

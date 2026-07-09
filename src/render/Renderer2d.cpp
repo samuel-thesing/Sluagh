@@ -7,18 +7,20 @@
 struct PositionColorVertex {
 	Vec4f pos;
 	Vec4f color;
+	Vec2f texture_coord;
+	float texture;
 };
 
 RenderCommand2d::RenderCommand2d(uint32_t position_count, uint16_t index_count)
 	: position_count(position_count), index_count(index_count), color(Colors::MAGENTA),
-		texture_id(0) {
+		texture(nullptr) {
 	positions = new Vec2f[position_count];
 	indices = new uint16_t[index_count];
 	texture_coords = nullptr;
 }
 
-RenderCommand2d::RenderCommand2d(uint32_t position_count, uint16_t index_count, uint16_t texture_id)
-	: position_count(position_count), index_count(index_count), color(Colors::MAGENTA), texture_id(texture_id) {
+RenderCommand2d::RenderCommand2d(uint32_t position_count, uint16_t index_count, SDL_GPUTexture* texture)
+	: position_count(position_count), index_count(index_count), color(Colors::MAGENTA), texture(texture) {
 	positions = new Vec2f[position_count];
 	indices = new uint16_t[index_count];
 	texture_coords = new Vec2f[position_count];
@@ -35,7 +37,7 @@ RenderCommand2d::RenderCommand2d(RenderCommand2d &&o) noexcept {
 	color = o.color;
 	position_count = o.position_count;
 	index_count = o.index_count;
-	texture_id = o.texture_id;
+	texture = o.texture;
 }
 
 RenderCommand2d::~RenderCommand2d() {
@@ -66,10 +68,25 @@ void Renderer2d::renderPass(RenderPass2d *pass) {
 	uint32_t count_indices = 0;
 	uint32_t count_textures = 0;
 	uint32_t last_flush_index = 0;
-	SDL_GPUTexture
+	auto textures = std::vector<SDL_GPUTexture*>(sampler_count, nullptr);
 	for (uint32_t i = 0; i < commands.size(); i++) {
+		count_vertices += commands[i].position_count;
+		count_indices += commands[i].index_count;
+
+		bool texture_found = true; // no texture => "always found"
+		if (commands[i].texture != nullptr) {
+			texture_found = false;
+			for (uint32_t j = 0; j < count_textures; j++) {
+				if (textures[j] == commands[i].texture) {
+					texture_found = true;
+					break;
+				}
+			}
+		}
+
 		if (count_vertices + commands[i].position_count >= MAX_VERTICES_PER_BATCH
-			|| count_indices + commands[i].index_count >= MAX_INDICES_PER_BATCH) {
+			|| count_indices + commands[i].index_count >= MAX_INDICES_PER_BATCH
+			|| (!texture_found && count_textures >= sampler_count)) {
 
 			flush(
 				target,
@@ -77,16 +94,23 @@ void Renderer2d::renderPass(RenderPass2d *pass) {
 				commands,
 				last_flush_index,
 				i - last_flush_index,
-				count_vertices - commands[i].position_count,
-				count_indices - commands[i].index_count
+				count_vertices,
+				count_indices,
+				textures,
+				count_textures
 			);
 			last_flush_index = i;
 			count_vertices = 0;
 			count_indices = 0;
+			count_textures = 0;
 		}
 
 		count_vertices += commands[i].position_count;
 		count_indices += commands[i].index_count;
+		if (!texture_found) {
+			textures[count_textures] = commands[i].texture;
+			count_textures++;
+		}
 	}
 
 	if (count_vertices != 0 || count_indices != 0) {
@@ -97,7 +121,9 @@ void Renderer2d::renderPass(RenderPass2d *pass) {
 			last_flush_index,
 			static_cast<uint32_t>(commands.size() - last_flush_index),
 			count_vertices,
-			count_indices
+			count_indices,
+			textures,
+			count_textures
 		);
 	}
 }
@@ -105,7 +131,8 @@ void Renderer2d::renderPass(RenderPass2d *pass) {
 void Renderer2d::flush(RenderTarget* target, int z_index,
 		const std::vector<RenderCommand2d>& commands,
 		uint32_t offset, uint32_t command_count,
-		uint32_t count_vertices, uint32_t count_indices) {
+		uint32_t count_vertices, uint32_t count_indices,
+		const std::vector<SDL_GPUTexture*>& textures, uint32_t count_textures) {
 	auto* transfer_data = static_cast<PositionColorVertex*>(
 		SDL_MapGPUTransferBuffer(Application::getGPUDevice(), transfer_buffer, true)
 	);
@@ -118,12 +145,26 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 	uint16_t vertex_offset = 0;
 	for (uint32_t i = offset; i < offset + command_count; i++) {
 		const auto& command = commands[i];
+		float texture = -1.f;
+		if (command.texture != nullptr) {
+			for (uint32_t j = 0; j < count_textures; j++) {
+				if (textures[j] == command.texture) {
+					texture = static_cast<float>(j);
+					break;
+				}
+			}
+		}
 		for (uint32_t j = 0; j < command.position_count; j++, vertex_i++) {
+
 			transfer_data[vertex_i].pos = proj * Vec4f(
 				command.positions[j].x(), command.positions[j].y(),
 				z_index, 1.f
 			);
 			transfer_data[vertex_i].color = command.color.toVec4();
+			if (command.texture != nullptr) {
+				transfer_data[vertex_i].texture_coord = command.texture_coords[j];
+			}
+			transfer_data[vertex_i].texture = texture;
 		}
 
 		for (uint32_t j = 0; j < command.index_count; j++, index_i++) {
@@ -160,7 +201,6 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 
 	SDL_EndGPUCopyPass(copy_pass);
 
-	// render pass for
 	SDL_GPUColorTargetInfo color_target = {
 		.texture = target->getTexture(),
 		.mip_level = 0,
@@ -198,6 +238,26 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 		.offset = 0
 	};
 	SDL_BindGPUIndexBuffer(render_pass, &index_binding, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+
+	std::vector<SDL_GPUTextureSamplerBinding> sampler_bindings = {};
+	sampler_bindings.reserve(sampler_count);
+	for (uint32_t i = 0; i < count_textures; i++) {
+		sampler_bindings.push_back({
+			.texture = textures[i],
+			.sampler = samplers[i]
+		});
+	}
+	if (count_textures != sampler_count) {// not all texture slots used
+		auto* white_texture = Application::getTextureManager()->getTexture(0)->getTexture();
+		for (uint32_t i = count_textures; i < sampler_count; i++) {
+			sampler_bindings.push_back({
+				.texture = white_texture,
+				.sampler = samplers[i]
+			});
+		}
+	}
+	SDL_BindGPUFragmentSamplers(render_pass, 0, sampler_bindings.data(), sampler_count);
+
 	SDL_DrawGPUIndexedPrimitives(render_pass, count_indices, 1, 0, 0, 0);
 
 	SDL_EndGPURenderPass(render_pass);
@@ -206,11 +266,27 @@ void Renderer2d::flush(RenderTarget* target, int z_index,
 Renderer2d::Renderer2d() {
 	auto* gpu_device = Application::getGPUDevice();
 
+	sampler_count = 16;
+	samplers = std::vector<SDL_GPUSampler*>(sampler_count, nullptr);
+	for (uint32_t i = 0; i < sampler_count; i++) {
+		SDL_GPUSamplerCreateInfo sampler_info = {
+			.min_filter = SDL_GPU_FILTER_NEAREST,
+			.mag_filter = SDL_GPU_FILTER_LINEAR,
+			.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+			.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+			.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+			.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE
+		};
+		samplers[i] = SDL_CreateGPUSampler(
+			Application::getGPUDevice(), &sampler_info
+		);
+	}
+
 	SDL_GPUShader *vertex_shader = loadShader(gpu_device,
 		"./rsc/shader/basic.vert", 0, 0,
 		0, 0);
 	SDL_GPUShader *fragment_shader = loadShader(gpu_device,
-		"./rsc/shader/basic.frag", 0, 0,
+		"./rsc/shader/basic.frag", sampler_count, 0,
 		0, 0);
 
 	SDL_GPUColorTargetDescription color_target = {
@@ -245,6 +321,18 @@ Renderer2d::Renderer2d() {
 			.buffer_slot = 0,
 			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
 			.offset = sizeof(float) * 4
+		},
+		{
+			.location = 2,
+			.buffer_slot = 0,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			.offset = sizeof(float) * 8
+		},
+		{
+			.location = 3,
+			.buffer_slot = 0,
+			.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT,
+			.offset = sizeof(float) * 10
 		}
 	};
 
@@ -255,7 +343,7 @@ Renderer2d::Renderer2d() {
 			.vertex_buffer_descriptions = &vertex_buffer_description,
 			.num_vertex_buffers = 1,
 			.vertex_attributes = vertex_attribs,
-			.num_vertex_attributes = 2,
+			.num_vertex_attributes = 4,
 		},
 		.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
 		.depth_stencil_state = {
@@ -317,6 +405,11 @@ Renderer2d::~Renderer2d() {
 	SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
 	SDL_ReleaseGPUBuffer(gpu_device, vertex_buffer);
 	SDL_ReleaseGPUBuffer(gpu_device, index_buffer);
+
+	for (auto* sampler : samplers) {
+		SDL_ReleaseGPUSampler(gpu_device, sampler);
+	}
+
 	SDL_ReleaseGPUGraphicsPipeline(gpu_device, pipeline);
 }
 void Renderer2d::beginPass(int z) {
@@ -330,7 +423,7 @@ void Renderer2d::beginPass(RenderTarget* target, int z) {
 }
 void Renderer2d::endPass() {
 	auto* pass = render_pass_stack.back();
-	addRenderPass(pass);
+	render_manager->addRenderPass(pass);
 	render_pass_stack.pop_back();
 }
 
@@ -428,6 +521,31 @@ void Renderer2d::fillRect(Vec2f pos, Vec2f size) {
 	command.positions[1] = Vec2f(br.x(), br.y());
 	command.positions[2] = Vec2f(br.x(), tl.y());
 	command.positions[3] = Vec2f(tl.x(), br.y());
+
+	command.indices[0] = 0;
+	command.indices[1] = 1;
+	command.indices[2] = 2;
+	command.indices[3] = 0;
+	command.indices[4] = 3;
+	command.indices[5] = 1;
+	render_pass_stack.back()->addCommand(std::move(command));
+}
+void Renderer2d::drawTexture(SDL_GPUTexture *texture, Vec2f pos, Vec2f size) {
+	auto command = RenderCommand2d(4, 6, texture);
+	command.color = Colors::WHITE;
+
+	auto tl = pos;
+	auto br = pos + size;
+
+	command.positions[0] = Vec2f(tl.x(), tl.y());
+	command.positions[1] = Vec2f(br.x(), br.y());
+	command.positions[2] = Vec2f(br.x(), tl.y());
+	command.positions[3] = Vec2f(tl.x(), br.y());
+
+	command.texture_coords[0] = Vec2f(0.f, 0.f);
+	command.texture_coords[1] = Vec2f(1.f, 1.f);
+	command.texture_coords[2] = Vec2f(1.f, 0.f);
+	command.texture_coords[3] = Vec2f(0.f, 1.f);
 
 	command.indices[0] = 0;
 	command.indices[1] = 1;

@@ -1,11 +1,16 @@
 #ifndef SLUAGH_RENDERMANAGER_H
 #define SLUAGH_RENDERMANAGER_H
 
+#include "sluagh/utils/Logger.h"
+
 #include <SDL3/SDL.h>
 
 #include <vector>
 
 #include "sluagh/utils/Matrix.h"
+
+#include <typeindex>
+#include <unordered_map>
 
 enum class RenderTargetType {
 	Undefined,
@@ -64,8 +69,11 @@ public:
 	RenderTarget* getRenderTarget() { return target; }
 };
 
+class Renderer;
+
 class RenderManager {
 private:
+	std::unordered_map<std::type_index, Renderer*> renderers;
 	std::vector<RenderPass*> render_passes; // ordered by z then by when they ended
 
 	// integrate effects as passes. how to "sort" them?
@@ -83,7 +91,31 @@ private:
 
 public:
 	RenderManager() = default;
-	~RenderManager() = default;
+	~RenderManager();
+
+	template<typename T> requires std::is_base_of_v<Renderer, T>
+	void addRenderer(T* instance) {
+		if (!renderers.emplace(std::type_index(typeid(T)), instance).second) {
+			Logger::error("Renderer was registered again");
+		} else {
+			instance->setRenderManager(this);
+		}
+	}
+
+	template<typename T> requires std::is_base_of_v<Renderer, T>
+	T* getRenderer() {
+		auto it = renderers.find(std::type_index(typeid(T)));
+		if (it == renderers.end()) {
+			Logger::critical("getRenderer: renderer was not registered");
+			throw std::runtime_error("getRenderer: renderer was not registered");
+		}
+
+		return static_cast<T*>(it->second);
+	}
+
+	void addRenderPass(RenderPass* render_pass);
+
+	void flushPasses();
 };
 
 #endif // SLUAGH_RENDERMANAGER_H

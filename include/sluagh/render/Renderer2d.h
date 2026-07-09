@@ -26,11 +26,11 @@ struct RenderCommand2d {
 	Vec2f* positions;
 	uint16_t* indices;
 	Color color;
-	uint16_t texture_id;
+	SDL_GPUTexture* texture;
 	Vec2f* texture_coords;
 
 	RenderCommand2d(uint32_t position_count, uint16_t index_count);
-	RenderCommand2d(uint32_t position_count, uint16_t index_count, uint16_t texture_id);
+	RenderCommand2d(uint32_t position_count, uint16_t index_count, SDL_GPUTexture* texture);
 	RenderCommand2d(RenderCommand2d&& o) noexcept;
 	~RenderCommand2d();
 };
@@ -60,6 +60,8 @@ private:
 	SDL_GPUBuffer* vertex_buffer;
 	SDL_GPUBuffer* index_buffer;
 	SDL_GPUTransferBuffer* transfer_buffer;
+	std::vector<SDL_GPUSampler*> samplers;
+	uint32_t sampler_count;
 
 	std::vector<RenderPass2d*> render_pass_stack;
 
@@ -67,7 +69,6 @@ private:
 
 	const uint16_t MAX_VERTICES_PER_BATCH = 20000;
 	const uint16_t MAX_INDICES_PER_BATCH = 30000;
-	const uint8_t MAX_TEXTURE_PER_BATCH = 16;
 
 private:
 	friend class RenderPass2d;
@@ -75,7 +76,8 @@ private:
 
 	void flush(RenderTarget* target, int z_index,
 		const std::vector<RenderCommand2d>& commands, uint32_t offset,
-		uint32_t command_count, uint32_t count_vertices, uint32_t count_indices);
+		uint32_t command_count, uint32_t count_vertices, uint32_t count_indices,
+		const std::vector<SDL_GPUTexture*>& textures, uint32_t count_textures);
 
 public:
 	Renderer2d();
@@ -91,6 +93,8 @@ public:
 	void drawRect(Vec2f pos, Vec2f size, float thickness = 2.f,
 		BorderAlignment border_alignment = BorderAlignment::CENTER);
 	void fillRect(Vec2f pos, Vec2f size);
+
+	void drawTexture(SDL_GPUTexture* texture, Vec2f pos, Vec2f size);
 
 	void drawCircle(Vec2f pos, float radius, float thickness = 2.f,
 		BorderAlignment border_alignment = BorderAlignment::CENTER);

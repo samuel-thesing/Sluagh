@@ -17,7 +17,6 @@ target_link_libraries(${APP_TARGET_NAME} PUBLIC
     project_optimizations
 
     SDL3::SDL3
-    SDL3_image::SDL3_image
     spdlog::spdlog
 )
 

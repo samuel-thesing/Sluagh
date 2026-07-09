@@ -11,18 +11,18 @@
 class SLUAGH_EXPORT Renderer {
 protected:
 	SDL_GPUCommandBuffer* command_buffer;
-	RendererManager* manager;
+	RenderManager* render_manager;
 
 protected:
-	void addRenderPass(RenderPass* pass);
+	friend class RenderManager;
+
+	void setRenderManager(RenderManager* manager);
 
 public:
 	Renderer() = default;
 	virtual ~Renderer() = default;
 
 	void setCommandBuffer(SDL_GPUCommandBuffer* current_command_buffer);
-
-	void renderAll();
 };
 
 #endif // SLUAGH_RENDERER_H

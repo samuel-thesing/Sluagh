@@ -19,6 +19,7 @@ add_library(${PROJECT_NAME} ${_lib_type}
     render/Renderer.cpp
     render/Renderer2d.cpp
     render/Texture.cpp
+    render/TextureManager.cpp
     render/utils.cpp
     utils/Color.cpp
     utils/Logger.cpp
@@ -41,7 +42,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     project_optimizations
 
     SDL3::SDL3
-    SDL3_image::SDL3_image
     spdlog::spdlog
 )
 
