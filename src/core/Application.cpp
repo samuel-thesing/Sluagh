@@ -26,7 +26,16 @@ Application::Application(const Config& config) : config(config) {
 
 	SDL_SetHint(SDL_HINT_RENDER_VULKAN_DEBUG, "1");
 
-	gpu_device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, true, nullptr);
+	SDL_PropertiesID gpu_device_props = SDL_CreateProperties();
+	SDL_SetBooleanProperty(gpu_device_props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+
+	SDL_GPUVulkanOptions vulkan_options = {
+		.vulkan_api_version = static_cast<uint32_t>((1 << 22u) | (4 << 12u) | 350)
+	};
+
+	SDL_SetPointerProperty(gpu_device_props, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, &vulkan_options);
+
+	gpu_device = SDL_CreateGPUDeviceWithProperties(gpu_device_props);
 	if (gpu_device == nullptr) {
 		Logger::critical("Failed to create GPU device: {}", SDL_GetError());
 		throw std::runtime_error("Failed to create GPU device");
@@ -106,18 +115,16 @@ void Application::onRender() {
 
 	renderer2d->setCommandBuffer(cmd_buf);
 
-	renderer2d->beginPass();
+	renderer2d->beginPass(1);
 	renderer2d->setColor(Colors::RED);
-	renderer2d->fillRect({0.f, 0.f}, {200.f, 200.f});
+	renderer2d->fillRect({200.f, 200.f}, {150.f, 125.f});
 	renderer2d->endPass();
 
 	renderer2d->beginPass();
 	renderer2d->setColor(Colors::AQUAMARINE);
 	renderer2d->fillRect({300.f, 300.f}, {100.f, 50.f});
-	// renderer2d->setColor(Colors::GREEN);
-	// renderer2d->drawRect({50.f, 100.f}, {50.f, 50.f}, 5.f, BorderAlignment::INSIDE);
-
-	// renderer2d->drawBezier({0.f, 0.f}, {100.f, 0.f}, {0.f, 100.f}, {100.f, 100.f}, 20.f);
+	renderer2d->setColor(Colors::GREEN);
+	renderer2d->drawBezier({0.f, 0.f}, {100.f, 0.f}, {0.f, 100.f}, {100.f, 100.f}, 20.f);
 	renderer2d->endPass();
 
 	renderer2d->beginPass();
