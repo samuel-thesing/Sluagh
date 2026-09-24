@@ -4,6 +4,9 @@
 #include "sluagh/render/utils.h"
 #include "sluagh/utils/Logger.h"
 
+#include <algorithm>
+#include <numbers>
+
 struct PositionColorVertex {
 	Vec4f pos;
 	Vec4f color;
@@ -748,8 +751,8 @@ static void recursive_bezier(std::vector<Vec2f>& points, Vec2f p1, Vec2f p2, Vec
 		auto a23 = atan2(p3.y() - p2.y(), p3.x() - p2.x());
 		auto da1 = std::fabs(a23 - atan2(p2.y() - p1.y(), p2.x() - p1.x()));
 		auto da2 = std::fabs(atan2(p4.y() - p3.y(), p4.x() - p3.x()) - a23);
-		if (da1 >= std::numbers::pi) da1 = 2 * std::numbers::pi - da1;
-		if (da2 >= std::numbers::pi) da2 = 2 * std::numbers::pi - da2;
+		if (da1 >= std::numbers::pi) da1 = 2.f * static_cast<float>(std::numbers::pi) - da1;
+		if (da2 >= std::numbers::pi) da2 = 2.f * static_cast<float>(std::numbers::pi) - da2;
 
 		if (da1 + da2 < angle_tolerance) {
 			points.push_back(p23);

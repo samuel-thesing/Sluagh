@@ -15,12 +15,21 @@ add_library(${PROJECT_NAME} ${_lib_type}
     sluagh.cpp
     core/Application.cpp
     core/Window.cpp
+    render/Buffer.cpp
+    render/IndexBuffer.cpp
+    render/VertexBuffer.cpp
     render/RenderManager.cpp
     render/Renderer.cpp
     render/Renderer2d.cpp
+    render/RenderContext.cpp
+    render/RenderGraphTexture.cpp
+    render/ResourceManager.cpp
     render/Texture.cpp
     render/TextureManager.cpp
     render/utils.cpp
+    render/graph/PassNode.cpp
+    render/graph/RenderGraph.cpp
+    render/graph/RenderGraphBuilder.cpp
     utils/Color.cpp
     utils/Logger.cpp
     utils/Arguments.cpp

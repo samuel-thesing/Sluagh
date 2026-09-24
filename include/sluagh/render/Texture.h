@@ -6,20 +6,18 @@
 #include <SDL3/SDL_gpu.h>
 
 class Texture {
+	friend class RenderContext;
 protected:
+	SDL_GPUTexture* texture;
 	Vec2u size;
 	SDL_GPUTextureFormat format;
-	SDL_GPUTexture* texture;
 
 private:
-	void uploadTexture(void* data);
+	Texture(SDL_GPUTexture* texture, Vec2u size, SDL_GPUTextureFormat format);
 
 public:
 	Texture();
 	virtual ~Texture();
-
-	void loadFromFile(const std::string& path);
-	void createFromData(void* data, Vec2u texture_size);
 
 	Vec2u getSize() const { return size; }
 	SDL_GPUTextureFormat getFormat() const { return format; }
